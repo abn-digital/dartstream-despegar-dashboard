@@ -60,28 +60,87 @@ async function loadData() {
   }));
 }
 
+// ========== DATE HELPERS ==========
+const MONTH_NAMES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MONTH_NAMES_FULL = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+function getISOWeek(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+}
+
+function parseMonth(dateStr) {
+  // dateStr = "2026-06-04" → "2026-06"
+  return dateStr.substring(0, 7);
+}
+
+function formatMonthLabel(ym) {
+  // ym = "2026-06" → "Jun 2026"
+  const [y, m] = ym.split('-');
+  return MONTH_NAMES[parseInt(m)] + ' ' + y;
+}
+
 // ========== FILTER BINDING ==========
 function bindFilters() {
   console.log('[dashboard] bindFilters called. RAW_DATA rows:', RAW_DATA.length);
 
-  // 1. Bind Device filter
+  // --- Populate Month options from data ---
+  const monthSelect = document.getElementById('filterMonth');
+  if (monthSelect) {
+    const months = [...new Set(RAW_DATA.map(r => parseMonth(r.date)))].sort().reverse();
+    monthSelect.innerHTML = '<option value="all">Todos</option>';
+    months.forEach(ym => {
+      const opt = document.createElement('option');
+      opt.value = ym;
+      opt.textContent = formatMonthLabel(ym);
+      monthSelect.appendChild(opt);
+    });
+    monthSelect.addEventListener('change', () => {
+      FILTERS.month = monthSelect.value;
+      render();
+    });
+  }
+
+  // --- Populate Week options from data ---
+  const weekSelect = document.getElementById('filterWeek');
+  if (weekSelect) {
+    const weeksSet = new Map();
+    RAW_DATA.forEach(r => {
+      const wn = getISOWeek(r.date);
+      const key = 'W' + wn;
+      if (!weeksSet.has(key)) weeksSet.set(key, wn);
+    });
+    const weeks = [...weeksSet.entries()].sort((a, b) => b[1] - a[1]);
+    weekSelect.innerHTML = '<option value="all">Todas</option>';
+    weeks.forEach(([label]) => {
+      const opt = document.createElement('option');
+      opt.value = label;
+      opt.textContent = label;
+      weekSelect.appendChild(opt);
+    });
+    weekSelect.addEventListener('change', () => {
+      FILTERS.week = weekSelect.value;
+      render();
+    });
+  }
+
+  // --- Device filter ---
   const deviceSelect = document.getElementById('filterDevice');
   if (deviceSelect) {
     deviceSelect.addEventListener('change', () => {
-      console.log('[dashboard] device changed to:', deviceSelect.value);
       FILTERS.device = deviceSelect.value;
       render();
     });
   }
 
-  // 2. Bind Platform filter (maps to device)
+  // --- Platform filter (maps to device) ---
   const platformSelect = document.getElementById('filterPlatform');
   if (platformSelect) {
     platformSelect.addEventListener('change', () => {
-      console.log('[dashboard] platform changed to:', platformSelect.value);
       FILTERS.device = platformSelect.value;
       render();
-      // Also sync the device select
       if (deviceSelect) {
         const mapBack = { 'site-desktop': 'desktop', 'site-mobile': 'mobile', 'app': 'mobile', 'all': 'all' };
         deviceSelect.value = mapBack[platformSelect.value] || 'all';
@@ -89,7 +148,7 @@ function bindFilters() {
     });
   }
 
-  // 3. Populate & bind Channel filter dynamically
+  // --- Channel filter (populate dynamically) ---
   const channelSelect = document.getElementById('filterChannel');
   if (channelSelect) {
     const channels = [...new Set(RAW_DATA.map(r => r.channel_group))].sort();
@@ -100,63 +159,41 @@ function bindFilters() {
       opt.textContent = ch;
       channelSelect.appendChild(opt);
     });
-    console.log('[dashboard] channels populated:', channels);
-
     channelSelect.addEventListener('change', () => {
-      console.log('[dashboard] channel changed to:', channelSelect.value);
       FILTERS.channel = channelSelect.value;
       render();
     });
   }
 
-  // 4. Bind Month filter (future: will filter by date month)
-  const monthSelect = document.getElementById('filterMonth');
-  if (monthSelect) {
-    monthSelect.addEventListener('change', () => {
-      console.log('[dashboard] month changed to:', monthSelect.value);
-      FILTERS.month = monthSelect.value;
-      render();
-    });
-  }
-
-  // 5. Bind Week filter (future)
-  const weekSelect = document.getElementById('filterWeek');
-  if (weekSelect) {
-    weekSelect.addEventListener('change', () => {
-      console.log('[dashboard] week changed to:', weekSelect.value);
-      FILTERS.week = weekSelect.value;
-      render();
-    });
-  }
-
-  // 6. Bind Product and Partner (no-op for now but log)
+  // --- Product & Partner (no data dimension yet) ---
   ['filterProduct', 'filterPartner'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('change', () => {
-        console.log('[dashboard] ' + id + ' changed to:', el.value);
-        // No data dimension available yet
-      });
-    }
+    if (el) el.addEventListener('change', () => {});
   });
 
   initSidebar();
-  console.log('[dashboard] All filters bound successfully');
+  console.log('[dashboard] All filters bound');
 }
 
 // ========== FILTER DATA ==========
 function getFilteredData() {
   return RAW_DATA.filter(row => {
+    // Month filter — e.g. "2026-06"
+    if (FILTERS.month !== 'all') {
+      if (parseMonth(row.date) !== FILTERS.month) return false;
+    }
+
+    // Week filter — e.g. "W23"
+    if (FILTERS.week !== 'all') {
+      const rowWeek = 'W' + getISOWeek(row.date);
+      if (rowWeek !== FILTERS.week) return false;
+    }
+
     // Device filter
     if (FILTERS.device !== 'all') {
-      // Map filter values
       const deviceMap = {
-        'desktop': 'desktop',
-        'mobile': 'mobile',
-        'tablet': 'tablet',
-        'site-desktop': 'desktop',
-        'site-mobile': 'mobile',
-        'app': 'mobile', // app SDK maps to mobile
+        'desktop': 'desktop', 'mobile': 'mobile', 'tablet': 'tablet',
+        'site-desktop': 'desktop', 'site-mobile': 'mobile', 'app': 'mobile',
       };
       const target = deviceMap[FILTERS.device] || FILTERS.device;
       if (row.device_category !== target) return false;
@@ -232,6 +269,20 @@ function render() {
   renderPlatformLegend(platforms);
   renderDonutChart(platforms);
   renderEvolutionChart(daily);
+  updatePeriodBadge(filtered);
+}
+
+function updatePeriodBadge(filtered) {
+  const badge = document.querySelector('.period-badge span');
+  if (!badge || filtered.length === 0) return;
+  const dates = [...new Set(filtered.map(r => r.date))].sort();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const fmtDate = (d) => {
+    const [y, m, day] = d.split('-');
+    return parseInt(day) + ' ' + MONTH_NAMES[parseInt(m)] + ' ' + y;
+  };
+  badge.textContent = dates.length === 1 ? fmtDate(first) : fmtDate(first) + ' – ' + fmtDate(last);
 }
 
 // ========== RENDER KPIs ==========
