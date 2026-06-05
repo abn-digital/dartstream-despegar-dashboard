@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Despegar B2B2C — Performance Dashboard</title>
+  <meta name="description" content="Dashboard de performance de negocio y funnel para Despegar B2B2C (Naranja X Viajes)">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#540CEC"/><path d="M10 8h6c4.4 0 8 3.6 8 8s-3.6 8-8 8h-6V8zm4 12h2c2.2 0 4-1.8 4-4s-1.8-4-4-4h-2v8z" fill="white"/></svg>
+        </div>
+        <div>
+          <div class="logo-title">Despegar</div>
+          <div class="logo-sub">B2B2C Performance</div>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">PERIODO</div>
+      <div class="filter-group">
+        <label class="filter-label">Mes</label>
+        <select class="filter-select" id="filterMonth">
+          <option value="6" selected>Jun 2026</option>
+          <option value="5">Mayo 2026</option>
+          <option value="4">Abril 2026</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Semana</label>
+        <select class="filter-select" id="filterWeek">
+          <option value="all" selected>Todas</option>
+          <option value="23">W23</option>
+          <option value="22">W22</option>
+          <option value="21">W21</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">SEGMENTACIÓN</div>
+      <div class="filter-group">
+        <label class="filter-label">Dispositivo</label>
+        <select class="filter-select" id="filterDevice">
+          <option value="all" selected>Todos</option>
+          <option value="desktop">Desktop</option>
+          <option value="mobile">Mobile</option>
+          <option value="tablet">Tablet</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Plataforma</label>
+        <select class="filter-select" id="filterPlatform">
+          <option value="all" selected>Todas</option>
+          <option value="site-desktop">Site Desktop</option>
+          <option value="site-mobile">Site Mobile</option>
+          <option value="app">App (SDK)</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Canal</label>
+        <select class="filter-select" id="filterChannel">
+          <option value="all" selected>Todos</option>
+          <option value="paid">Paid</option>
+          <option value="organic">Organic</option>
+          <option value="direct">Direct</option>
+          <option value="referral">Referral</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">PRODUCTO & PARTNER</div>
+      <div class="filter-group">
+        <label class="filter-label">Producto</label>
+        <select class="filter-select" id="filterProduct">
+          <option value="all" selected>Todos</option>
+          <option value="vuelos">Vuelos</option>
+          <option value="hoteles">Hoteles</option>
+          <option value="paquetes">Paquetes</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Partner</label>
+        <select class="filter-select" id="filterPartner">
+          <option value="all" selected>Todos</option>
+          <option value="naranjax">Naranja X</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-footer-badge">
+        <div class="pulse-dot"></div>
+        <span>Datos actualizados</span>
+      </div>
+      <div class="sidebar-footer-time">Hoy 11:07 AM</div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content" id="mainContent">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h1 class="page-title">Performance Dashboard</h1>
+        <div class="eyebrow-pill">
+          <div class="eyebrow-dot"></div>
+          <span>NARANJA X VIAJES</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="period-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>31 May – 4 Jun 2026</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Dashboard Grid -->
+    <div class="dashboard-grid">
+
+      <!-- ===== SECTION: Performance Negocio ===== -->
+      <section class="section-performance" id="sectionPerformance">
+        <div class="section-header">
+          <div class="section-icon">🚀</div>
+          <h2 class="section-title">Performance Negocio</h2>
+        </div>
+
+        <div class="kpi-table">
+          <div class="kpi-table-header">
+            <div class="kpi-th kpi-th-metric">Métrica</div>
+            <div class="kpi-th">Actual</div>
+            <div class="kpi-th">vs LP</div>
+            <div class="kpi-th">vs LY</div>
+          </div>
+
+          <div class="kpi-row" data-animate="1">
+            <div class="kpi-metric-cell">
+              <div class="kpi-metric-icon kpi-icon-gb">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              </div>
+              <div>
+                <div class="kpi-metric-name">Gross Bookings</div>
+                <div class="kpi-metric-sub">Revenue total</div>
+              </div>
+            </div>
+            <div class="kpi-value-cell">
+              <span class="kpi-value">$2,790,098</span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-negative">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/></svg>
+                -40%
+              </span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-neutral">0%</span>
+            </div>
+          </div>
+
+          <div class="kpi-row" data-animate="2">
+            <div class="kpi-metric-cell">
+              <div class="kpi-metric-icon kpi-icon-margin">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+              </div>
+              <div>
+                <div class="kpi-metric-name">Margen</div>
+                <div class="kpi-metric-sub">Rentabilidad</div>
+              </div>
+            </div>
+            <div class="kpi-value-cell">
+              <span class="kpi-value">$62,641</span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-negative">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/></svg>
+                -64%
+              </span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-neutral">0%</span>
+            </div>
+          </div>
+
+          <div class="kpi-row" data-animate="3">
+            <div class="kpi-metric-cell">
+              <div class="kpi-metric-icon kpi-icon-orders">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+              </div>
+              <div>
+                <div class="kpi-metric-name">Orders</div>
+                <div class="kpi-metric-sub">Reservas completadas</div>
+              </div>
+            </div>
+            <div class="kpi-value-cell">
+              <span class="kpi-value">1,700</span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-negative">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/></svg>
+                -41%
+              </span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-neutral">0%</span>
+            </div>
+          </div>
+
+          <div class="kpi-row" data-animate="4">
+            <div class="kpi-metric-cell">
+              <div class="kpi-metric-icon kpi-icon-asp">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8"/><line x1="12" y1="6" x2="12" y2="18"/></svg>
+              </div>
+              <div>
+                <div class="kpi-metric-name">ASP</div>
+                <div class="kpi-metric-sub">Ticket promedio</div>
+              </div>
+            </div>
+            <div class="kpi-value-cell">
+              <span class="kpi-value">$1,641</span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-positive">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg>
+                +2%
+              </span>
+            </div>
+            <div class="kpi-delta-cell">
+              <span class="kpi-delta kpi-delta-neutral">0%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SECTION: Funnel ===== -->
+      <section class="section-funnel" id="sectionFunnel">
+        <div class="section-header">
+          <div class="section-icon">📊</div>
+          <h2 class="section-title">Funnel</h2>
+        </div>
+
+        <!-- CVR KPIs -->
+        <div class="cvr-strip">
+          <div class="cvr-card">
+            <div class="cvr-label">CVR LW</div>
+            <div class="cvr-value">0.81%</div>
+          </div>
+          <div class="cvr-divider"></div>
+          <div class="cvr-card">
+            <div class="cvr-label">CVR Actual</div>
+            <div class="cvr-value cvr-value-main">0.20%</div>
+          </div>
+          <div class="cvr-divider"></div>
+          <div class="cvr-card">
+            <div class="cvr-label">vs LW</div>
+            <div class="cvr-value cvr-value-negative">-75.49%</div>
+          </div>
+        </div>
+
+        <!-- Funnel Bars -->
+        <div class="funnel-chart" id="funnelChart">
+          <div class="funnel-step" data-animate="1">
+            <div class="funnel-step-label">
+              <span class="funnel-step-name">Usuarios</span>
+              <span class="funnel-step-count">1,491,017</span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar" style="--width: 100%; --color: var(--brand);" data-value="100"></div>
+            </div>
+            <span class="funnel-pct">100%</span>
+          </div>
+
+          <div class="funnel-drop-indicator">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="funnel-drop-text">-37.2% drop</span>
+          </div>
+
+          <div class="funnel-step" data-animate="2">
+            <div class="funnel-step-label">
+              <span class="funnel-step-name">Searchers</span>
+              <span class="funnel-step-count">937,023</span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar" style="--width: 62.8%; --color: #7A0FD6;" data-value="62.8"></div>
+            </div>
+            <span class="funnel-pct">62.8%</span>
+          </div>
+
+          <div class="funnel-drop-indicator">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="funnel-drop-text">-90.7% drop</span>
+          </div>
+
+          <div class="funnel-step" data-animate="3">
+            <div class="funnel-step-label">
+              <span class="funnel-step-name">Detail</span>
+              <span class="funnel-step-count">87,162</span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar" style="--width: 5.8%; --color: #9D17C9;" data-value="5.8"></div>
+            </div>
+            <span class="funnel-pct">5.8%</span>
+          </div>
+
+          <div class="funnel-drop-indicator">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="funnel-drop-text">-89.1% drop</span>
+          </div>
+
+          <div class="funnel-step" data-animate="4">
+            <div class="funnel-step-label">
+              <span class="funnel-step-name">Checkout</span>
+              <span class="funnel-step-count">9,540</span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar" style="--width: 0.64%; --color: #C42B6B;" data-value="0.64"></div>
+            </div>
+            <span class="funnel-pct">0.64%</span>
+          </div>
+
+          <div class="funnel-drop-indicator">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="funnel-drop-text">-80.5% drop</span>
+          </div>
+
+          <div class="funnel-step" data-animate="5">
+            <div class="funnel-step-label">
+              <span class="funnel-step-name">Bookings</span>
+              <span class="funnel-step-count">1,861</span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar funnel-bar-final" style="--width: 0.12%; --color: #E5337A;" data-value="0.12"></div>
+            </div>
+            <span class="funnel-pct">0.12%</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SECTION: Distribución por Plataforma ===== -->
+      <section class="section-platform" id="sectionPlatform">
+        <div class="section-header">
+          <div class="section-icon">📱</div>
+          <h2 class="section-title">Distribución por Plataforma</h2>
+        </div>
+
+        <div class="platform-content">
+          <div class="donut-container">
+            <canvas id="donutChart" width="220" height="220"></canvas>
+            <div class="donut-center">
+              <div class="donut-center-value">1.9K</div>
+              <div class="donut-center-label">Bookings</div>
+            </div>
+          </div>
+          <div class="platform-legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: #540CEC;"></div>
+              <div class="legend-info">
+                <div class="legend-name">Site Desktop</div>
+                <div class="legend-detail">
+                  <span class="legend-value">1.3K</span>
+                  <span class="legend-pct">67.53%</span>
+                </div>
+              </div>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #9D17C9;"></div>
+              <div class="legend-info">
+                <div class="legend-name">Site Mobile</div>
+                <div class="legend-detail">
+                  <span class="legend-value">486</span>
+                  <span class="legend-pct">26.11%</span>
+                </div>
+              </div>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #E5337A;"></div>
+              <div class="legend-info">
+                <div class="legend-name">App (SDK)</div>
+                <div class="legend-detail">
+                  <span class="legend-value">118</span>
+                  <span class="legend-pct">6.36%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SECTION: Evolución CVR ===== -->
+      <section class="section-evolution" id="sectionEvolution">
+        <div class="section-header">
+          <div class="section-icon">📈</div>
+          <h2 class="section-title">Evolución CVR</h2>
+        </div>
+
+        <div class="chart-container">
+          <canvas id="evolutionChart" width="600" height="280"></canvas>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
