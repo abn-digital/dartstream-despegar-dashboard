@@ -332,16 +332,16 @@ h1, h2, h3, .font-display {
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   gap: 20px;
   padding: 24px 28px 40px;
   max-width: 1400px;
 }
 
 .section-performance { grid-column: 1; grid-row: 1; }
-.section-funnel      { grid-column: 2; grid-row: 1; }
-.section-platform    { grid-column: 1; grid-row: 2; }
-.section-evolution   { grid-column: 2; grid-row: 2; }
+.section-platform    { grid-column: 2; grid-row: 1; }
+.section-funnel      { grid-column: 1 / -1; grid-row: 2; }
+.section-evolution   { grid-column: 1 / -1; grid-row: 3; }
 
 .section-performance,
 .section-funnel,
@@ -548,10 +548,10 @@ h1, h2, h3, .font-display {
 
 .funnel-step {
   display: grid;
-  grid-template-columns: 140px 1fr 50px;
+  grid-template-columns: 180px 1fr 60px;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
+  gap: 16px;
+  padding: 10px 0;
   opacity: 0;
   transform: translateX(-16px);
   animation: fadeInLeft 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -571,20 +571,20 @@ h1, h2, h3, .font-display {
   flex-direction: column;
 }
 .funnel-step-name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
 .funnel-step-count {
   font-family: 'Poppins', sans-serif;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
 .funnel-bar-track {
-  height: 28px;
+  height: 36px;
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -614,7 +614,7 @@ h1, h2, h3, .font-display {
 }
 
 .funnel-pct {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-3);
   text-align: right;
@@ -625,11 +625,11 @@ h1, h2, h3, .font-display {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 0 2px 60px;
+  padding: 2px 0 2px 80px;
 }
 
 .funnel-drop-text {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-3);
 }
@@ -727,7 +727,7 @@ h1, h2, h3, .font-display {
 .chart-container {
   position: relative;
   width: 100%;
-  height: 280px;
+  height: 340px;
 }
 .chart-container canvas {
   width: 100% !important;
@@ -747,8 +747,8 @@ h1, h2, h3, .font-display {
     grid-template-rows: auto;
   }
   .section-performance { grid-column: 1; grid-row: 1; }
-  .section-funnel      { grid-column: 1; grid-row: 2; }
-  .section-platform    { grid-column: 1; grid-row: 3; }
+  .section-platform    { grid-column: 1; grid-row: 2; }
+  .section-funnel      { grid-column: 1; grid-row: 3; }
   .section-evolution   { grid-column: 1; grid-row: 4; }
 }
 
