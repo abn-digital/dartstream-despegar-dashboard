@@ -1,13 +1,11 @@
 // ========== Despegar B2B2C Dashboard — app.js ==========
+// Macro-to-Micro architecture: Overview → Funnel & Journey → Detalle Táctico
 // Real data from BigQuery: bigquery-388915.despegar_b2b2c.master_results
-// Granular by date × device_category × channel_group
-// Filters are reactive — all charts re-render on change.
-
-// ========== RAW GRANULAR DATA (from BQ) ==========
-// Each row: { date, device_category, channel_group, session_start, search, view_item, begin_checkout, purchase, purchase_revenue, ... }
-let RAW_DATA = [];
 
 // ========== STATE ==========
+let RAW_DATA = [];
+let currentTab = 'overview';
+
 const FILTERS = {
   month: 'all',
   week: 'all',
@@ -15,17 +13,30 @@ const FILTERS = {
   channel: 'all',
 };
 
+// Cached computed data (recomputed on filter change)
+let COMPUTED = { filtered: [], totals: {}, daily: [], platforms: [] };
+
+// Data table state
+const DT = {
+  sortCol: 'date',
+  sortDir: 'desc',
+  page: 1,
+  perPage: 50,
+  searchQuery: '',
+};
+
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
   bindFilters();
-  render();
+  bindTabs();
+  bindSidebar();
+  bindDataTable();
+  recomputeAndRender();
 });
 
 // ========== LOAD DATA ==========
 async function loadData() {
-  // Data loaded from data.js (INLINE_DATA global)
-  // Falls back to fetch for served environments
   let json;
   if (typeof INLINE_DATA !== 'undefined') {
     json = INLINE_DATA;
@@ -35,7 +46,7 @@ async function loadData() {
       json = await resp.json();
     } catch (e) {
       console.error('Failed to load data', e);
-      json = FALLBACK_DATA;
+      json = [];
     }
   }
 
@@ -43,6 +54,8 @@ async function loadData() {
     date:               row.date,
     device_category:    (row.device_category || 'unknown').toLowerCase(),
     channel_group:      row.channel_group || 'Direct',
+    campaign_name:      row.campaign_name || '(not set)',
+    source_medium:      row.source_medium || '(not set)',
     session_start:      num(row.session_start),
     first_visit:        num(row.first_visit),
     page_view:          num(row.page_view),
@@ -58,11 +71,17 @@ async function loadData() {
     form_start:         num(row.form_start),
     file_download:      num(row.file_download),
   }));
+
+  // Update footer with data freshness
+  const dates = [...new Set(RAW_DATA.map(r => r.date))].sort();
+  if (dates.length > 0) {
+    const el = document.getElementById('lastUpdated');
+    if (el) el.textContent = 'Hasta ' + formatDateShort(dates[dates.length - 1]);
+  }
 }
 
 // ========== DATE HELPERS ==========
 const MONTH_NAMES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-const MONTH_NAMES_FULL = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 function getISOWeek(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -72,25 +91,61 @@ function getISOWeek(dateStr) {
 }
 
 function parseMonth(dateStr) {
-  // dateStr = "2026-06-04" → "2026-06"
   return dateStr.substring(0, 7);
 }
 
 function formatMonthLabel(ym) {
-  // ym = "2026-06" → "Jun 2026"
   const [y, m] = ym.split('-');
   return MONTH_NAMES[parseInt(m)] + ' ' + y;
 }
 
+function formatDateShort(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  return parseInt(d) + ' ' + MONTH_NAMES[parseInt(m)] + ' ' + y;
+}
+
+// ========== TAB SYSTEM ==========
+function bindTabs() {
+  // Topbar tabs
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+  // Sidebar nav items (mirror)
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+}
+
+function switchTab(tabId) {
+  currentTab = tabId;
+
+  // Update topbar tab buttons
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tabId);
+  });
+
+  // Update sidebar nav items
+  document.querySelectorAll('.nav-item').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tabId);
+  });
+
+  // Show/hide tab panels
+  const panelId = 'panel' + tabId.charAt(0).toUpperCase() + tabId.slice(1);
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === panelId);
+  });
+
+  // Render the active tab with current data
+  renderActiveTab();
+}
+
 // ========== FILTER BINDING ==========
 function bindFilters() {
-  console.log('[dashboard] bindFilters called. RAW_DATA rows:', RAW_DATA.length);
-
-  // --- Populate Month options from data ---
+  // --- Populate Month options ---
   const monthSelect = document.getElementById('filterMonth');
   if (monthSelect) {
     const months = [...new Set(RAW_DATA.map(r => parseMonth(r.date)))].sort().reverse();
-    monthSelect.innerHTML = '<option value="all">Todos</option>';
+    monthSelect.innerHTML = '<option value="all">Mes: Todos</option>';
     months.forEach(ym => {
       const opt = document.createElement('option');
       opt.value = ym;
@@ -99,11 +154,11 @@ function bindFilters() {
     });
     monthSelect.addEventListener('change', () => {
       FILTERS.month = monthSelect.value;
-      render();
+      onFilterChange();
     });
   }
 
-  // --- Populate Week options from data ---
+  // --- Populate Week options ---
   const weekSelect = document.getElementById('filterWeek');
   if (weekSelect) {
     const weeksSet = new Map();
@@ -113,7 +168,7 @@ function bindFilters() {
       if (!weeksSet.has(key)) weeksSet.set(key, wn);
     });
     const weeks = [...weeksSet.entries()].sort((a, b) => b[1] - a[1]);
-    weekSelect.innerHTML = '<option value="all">Todas</option>';
+    weekSelect.innerHTML = '<option value="all">Semana: Todas</option>';
     weeks.forEach(([label]) => {
       const opt = document.createElement('option');
       opt.value = label;
@@ -122,7 +177,7 @@ function bindFilters() {
     });
     weekSelect.addEventListener('change', () => {
       FILTERS.week = weekSelect.value;
-      render();
+      onFilterChange();
     });
   }
 
@@ -131,20 +186,7 @@ function bindFilters() {
   if (deviceSelect) {
     deviceSelect.addEventListener('change', () => {
       FILTERS.device = deviceSelect.value;
-      render();
-    });
-  }
-
-  // --- Platform filter (maps to device) ---
-  const platformSelect = document.getElementById('filterPlatform');
-  if (platformSelect) {
-    platformSelect.addEventListener('change', () => {
-      FILTERS.device = platformSelect.value;
-      render();
-      if (deviceSelect) {
-        const mapBack = { 'site-desktop': 'desktop', 'site-mobile': 'mobile', 'app': 'mobile', 'all': 'all' };
-        deviceSelect.value = mapBack[platformSelect.value] || 'all';
-      }
+      onFilterChange();
     });
   }
 
@@ -152,7 +194,7 @@ function bindFilters() {
   const channelSelect = document.getElementById('filterChannel');
   if (channelSelect) {
     const channels = [...new Set(RAW_DATA.map(r => r.channel_group))].sort();
-    channelSelect.innerHTML = '<option value="all">Todos</option>';
+    channelSelect.innerHTML = '<option value="all">Canal: Todos</option>';
     channels.forEach(ch => {
       const opt = document.createElement('option');
       opt.value = ch.toLowerCase();
@@ -161,51 +203,61 @@ function bindFilters() {
     });
     channelSelect.addEventListener('change', () => {
       FILTERS.channel = channelSelect.value;
-      render();
+      onFilterChange();
     });
   }
-
-  // --- Product & Partner (no data dimension yet) ---
-  ['filterProduct', 'filterPartner'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', () => {});
-  });
-
-  initSidebar();
-  console.log('[dashboard] All filters bound');
 }
 
 // ========== FILTER DATA ==========
 function getFilteredData() {
   return RAW_DATA.filter(row => {
-    // Month filter — e.g. "2026-06"
     if (FILTERS.month !== 'all') {
       if (parseMonth(row.date) !== FILTERS.month) return false;
     }
-
-    // Week filter — e.g. "W23"
     if (FILTERS.week !== 'all') {
       const rowWeek = 'W' + getISOWeek(row.date);
       if (rowWeek !== FILTERS.week) return false;
     }
-
-    // Device filter
     if (FILTERS.device !== 'all') {
-      const deviceMap = {
-        'desktop': 'desktop', 'mobile': 'mobile', 'tablet': 'tablet',
-        'site-desktop': 'desktop', 'site-mobile': 'mobile', 'app': 'mobile',
-      };
-      const target = deviceMap[FILTERS.device] || FILTERS.device;
-      if (row.device_category !== target) return false;
+      if (row.device_category !== FILTERS.device) return false;
     }
-
-    // Channel filter
     if (FILTERS.channel !== 'all') {
       if (row.channel_group.toLowerCase() !== FILTERS.channel) return false;
     }
-
     return true;
   });
+}
+
+// ========== COMPUTE & RENDER ==========
+function recomputeAndRender() {
+  COMPUTED.filtered = getFilteredData();
+  COMPUTED.totals = aggregate(COMPUTED.filtered);
+  COMPUTED.daily = aggregateByDate(COMPUTED.filtered);
+  COMPUTED.platforms = aggregateByDevice(COMPUTED.filtered);
+  updatePeriodBadge(COMPUTED.filtered);
+  renderActiveTab();
+}
+
+function onFilterChange() {
+  DT.page = 1; // Reset pagination on filter change
+  recomputeAndRender();
+}
+
+function renderActiveTab() {
+  const { filtered, totals, daily, platforms } = COMPUTED;
+
+  if (currentTab === 'overview') {
+    renderBANs(totals);
+    renderPlatformLegend(platforms);
+    renderDonutChart(platforms);
+    renderCVRSummary(totals, daily);
+  } else if (currentTab === 'funnel') {
+    renderFunnel(totals, daily);
+    // Delay canvas render to ensure container is visible
+    requestAnimationFrame(() => renderEvolutionChart(daily));
+  } else if (currentTab === 'detail') {
+    renderDataTable(filtered);
+  }
 }
 
 // ========== AGGREGATE ==========
@@ -216,15 +268,12 @@ function aggregate(data) {
     purchase: 0, purchase_revenue: 0, user_engagement: 0,
     scroll: 0, click: 0, form_start: 0, file_download: 0,
   };
-
   data.forEach(row => {
     Object.keys(totals).forEach(k => { totals[k] += row[k]; });
   });
-
   totals.asp = totals.purchase > 0 ? totals.purchase_revenue / totals.purchase : 0;
   totals.cvr = totals.session_start > 0 ? totals.purchase / totals.session_start * 100 : 0;
   totals.margin = totals.purchase_revenue * 0.0224;
-
   return totals;
 }
 
@@ -257,60 +306,56 @@ function aggregateByDevice(data) {
   return Object.values(byDev).sort((a, b) => b.bookings - a.bookings);
 }
 
-// ========== RENDER ALL ==========
-function render() {
-  const filtered = getFilteredData();
-  const totals = aggregate(filtered);
-  const daily = aggregateByDate(filtered);
-  const platforms = aggregateByDevice(filtered);
-
-  renderKPIs(totals);
-  renderFunnel(totals, daily);
-  renderPlatformLegend(platforms);
-  renderDonutChart(platforms);
-  renderEvolutionChart(daily);
-  updatePeriodBadge(filtered);
-}
-
-function updatePeriodBadge(filtered) {
-  const badge = document.querySelector('.period-badge span');
-  if (!badge || filtered.length === 0) return;
-  const dates = [...new Set(filtered.map(r => r.date))].sort();
-  const first = dates[0];
-  const last = dates[dates.length - 1];
-  const fmtDate = (d) => {
-    const [y, m, day] = d.split('-');
-    return parseInt(day) + ' ' + MONTH_NAMES[parseInt(m)] + ' ' + y;
-  };
-  badge.textContent = dates.length === 1 ? fmtDate(first) : fmtDate(first) + ' – ' + fmtDate(last);
-}
-
-// ========== RENDER KPIs ==========
-function renderKPIs(totals) {
-  const rows = document.querySelectorAll('.kpi-row');
-  if (rows.length < 4) return;
-
-  const kpis = [
-    { value: totals.purchase_revenue, prefix: '$', decimals: 0 },
-    { value: totals.margin,           prefix: '$', decimals: 0 },
-    { value: totals.purchase,         prefix: '',  decimals: 0 },
-    { value: totals.asp,              prefix: '$', decimals: 0 },
+// ========== RENDER BANs (Overview) ==========
+function renderBANs(totals) {
+  const items = [
+    { id: 'banGBValue',     value: totals.purchase_revenue, prefix: '$', decimals: 0 },
+    { id: 'banMarginValue', value: totals.margin,           prefix: '$', decimals: 0 },
+    { id: 'banOrdersValue', value: totals.purchase,         prefix: '',  decimals: 0 },
+    { id: 'banASPValue',    value: totals.asp,              prefix: '$', decimals: 0 },
   ];
 
-  rows.forEach((row, i) => {
-    const kpi = kpis[i];
-    const valueEl = row.querySelector('.kpi-value');
-    if (valueEl) {
-      valueEl.textContent = kpi.prefix + formatNumber(Math.round(kpi.value));
+  items.forEach(item => {
+    const el = document.getElementById(item.id);
+    if (el) {
+      el.textContent = item.prefix + formatNumber(Math.round(item.value));
+      // Animate
+      el.style.transition = 'none';
+      el.style.opacity = '0.4';
+      requestAnimationFrame(() => {
+        el.style.transition = 'opacity 0.3s ease';
+        el.style.opacity = '1';
+      });
     }
-    // Animate value change
-    valueEl.style.transition = 'none';
-    valueEl.style.opacity = '0.4';
-    requestAnimationFrame(() => {
-      valueEl.style.transition = 'opacity 0.3s ease';
-      valueEl.style.opacity = '1';
-    });
   });
+}
+
+// ========== RENDER CVR SUMMARY (Overview) ==========
+function renderCVRSummary(totals, daily) {
+  const cvrHero = document.getElementById('cvrHeroValue');
+  if (cvrHero) cvrHero.textContent = totals.cvr.toFixed(2) + '%';
+
+  const sessionsEl = document.getElementById('cvrSessions');
+  if (sessionsEl) sessionsEl.textContent = formatNumber(totals.session_start);
+
+  const bookingsEl = document.getElementById('cvrBookings');
+  if (bookingsEl) bookingsEl.textContent = formatNumber(totals.purchase);
+
+  if (daily.length > 0) {
+    const firstDay = daily[0];
+    const firstDayCvr = firstDay.session_start > 0 ? firstDay.purchase / firstDay.session_start * 100 : 0;
+
+    const cvrFirstEl = document.getElementById('cvrFirstDate');
+    if (cvrFirstEl) cvrFirstEl.textContent = firstDayCvr.toFixed(2) + '%';
+
+    const vsFirstEl = document.getElementById('cvrVsFirst');
+    if (vsFirstEl) {
+      const delta = firstDayCvr > 0 ? ((totals.cvr - firstDayCvr) / firstDayCvr * 100).toFixed(1) : '0.0';
+      const sign = parseFloat(delta) >= 0 ? '+' : '';
+      vsFirstEl.textContent = sign + delta + '%';
+      vsFirstEl.className = 'cvr-meta-value ' + (parseFloat(delta) < 0 ? 'negative' : 'positive');
+    }
+  }
 }
 
 // ========== RENDER FUNNEL ==========
@@ -363,18 +408,20 @@ function renderFunnel(totals, daily) {
     }
   });
 
-  // CVR strip
-  const cvrValues = document.querySelectorAll('.cvr-value');
-  if (cvrValues.length >= 3 && daily.length > 0) {
+  // CVR Strip
+  const cvrLW = document.getElementById('cvrLW');
+  const cvrActual = document.getElementById('cvrActual');
+  const cvrVsLW = document.getElementById('cvrVsLW');
+
+  if (cvrLW && cvrActual && cvrVsLW && daily.length > 0) {
     const firstDayCvr = daily[0].session_start > 0 ? daily[0].purchase / daily[0].session_start * 100 : 0;
     const overallCvr = totals.cvr;
     const vsLw = firstDayCvr > 0 ? ((overallCvr - firstDayCvr) / firstDayCvr * 100).toFixed(1) : '0.0';
 
-    cvrValues[0].textContent = firstDayCvr.toFixed(2) + '%';
-    cvrValues[1].textContent = overallCvr.toFixed(2) + '%';
-    cvrValues[1].className = 'cvr-value cvr-value-main';
-    cvrValues[2].textContent = vsLw + '%';
-    cvrValues[2].className = 'cvr-value ' + (parseFloat(vsLw) < 0 ? 'cvr-value-negative' : 'cvr-value-positive');
+    cvrLW.textContent = firstDayCvr.toFixed(2) + '%';
+    cvrActual.textContent = overallCvr.toFixed(2) + '%';
+    cvrVsLW.textContent = (parseFloat(vsLw) >= 0 ? '+' : '') + vsLw + '%';
+    cvrVsLW.className = 'cvr-chip-value ' + (parseFloat(vsLw) < 0 ? 'negative' : 'positive');
   }
 }
 
@@ -383,10 +430,10 @@ function renderPlatformLegend(platforms) {
   const colors = ['#540CEC', '#9D17C9', '#E5337A', '#FF7A33'];
   const totalBookings = platforms.reduce((s, p) => s + p.bookings, 0) || 1;
 
-  const centerVal = document.querySelector('.donut-center-value');
+  const centerVal = document.getElementById('donutCenterValue');
   if (centerVal) centerVal.textContent = formatK(totalBookings);
 
-  const legendContainer = document.querySelector('.platform-legend');
+  const legendContainer = document.getElementById('platformLegend');
   if (!legendContainer) return;
   legendContainer.innerHTML = '';
 
@@ -418,7 +465,7 @@ function renderDonutChart(platforms) {
 
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
-  const size = 220;
+  const size = 200;
   canvas.width = size * dpr;
   canvas.height = size * dpr;
   canvas.style.width = size + 'px';
@@ -434,7 +481,7 @@ function renderDonutChart(platforms) {
   }));
 
   const cx = size / 2, cy = size / 2;
-  const outerR = 100, innerR = 68, gap = 0.04;
+  const outerR = 90, innerR = 62, gap = 0.04;
   const total = segments.reduce((s, d) => s + d.value, 0) || 1;
 
   let startTime = null;
@@ -460,7 +507,6 @@ function renderDonutChart(platforms) {
         ctx.fillStyle = seg.color;
         ctx.fill();
 
-        // Highlight gloss
         ctx.save();
         ctx.globalCompositeOperation = 'source-atop';
         ctx.beginPath();
@@ -514,8 +560,7 @@ function renderEvolutionChart(daily) {
 
   const days = daily.map(d => {
     const parts = d.date.split('-');
-    const months = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    return parseInt(parts[2]) + ' ' + months[parseInt(parts[1])];
+    return parseInt(parts[2]) + ' ' + MONTH_NAMES[parseInt(parts[1])];
   });
   const searches = daily.map(d => d.search);
   const cvr = daily.map(d => d.session_start > 0 ? d.purchase / d.session_start * 100 : 0);
@@ -651,19 +696,207 @@ function renderEvolutionChart(daily) {
 
   evoAnimId = requestAnimationFrame(draw);
 
-  // Resize handler (debounced)
   if (!canvas._resizeBound) {
     canvas._resizeBound = true;
     let rt;
     window.addEventListener('resize', () => {
       clearTimeout(rt);
-      rt = setTimeout(() => renderEvolutionChart(daily), 200);
+      rt = setTimeout(() => {
+        if (currentTab === 'funnel') renderEvolutionChart(COMPUTED.daily);
+      }, 200);
     });
   }
 }
 
+// ========== DATA TABLE (Nivel 4) ==========
+function bindDataTable() {
+  // Sort headers
+  document.querySelectorAll('.data-table th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (DT.sortCol === col) {
+        DT.sortDir = DT.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        DT.sortCol = col;
+        DT.sortDir = 'desc';
+      }
+      // Update header classes
+      document.querySelectorAll('.data-table th').forEach(h => {
+        h.classList.remove('sorted-asc', 'sorted-desc');
+      });
+      th.classList.add(DT.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      renderDataTable(COMPUTED.filtered);
+    });
+  });
+
+  // Search
+  const searchInput = document.getElementById('dtSearch');
+  if (searchInput) {
+    let debounce;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        DT.searchQuery = searchInput.value;
+        DT.page = 1;
+        renderDataTable(COMPUTED.filtered);
+      }, 250);
+    });
+  }
+
+  // CSV Export
+  const btnCSV = document.getElementById('btnExportCSV');
+  if (btnCSV) {
+    btnCSV.addEventListener('click', () => exportCSV());
+  }
+}
+
+function renderDataTable(filtered) {
+  let rows = filtered.map(r => ({
+    ...r,
+    cvr: r.session_start > 0 ? r.purchase / r.session_start * 100 : 0,
+  }));
+
+  // Search filter
+  if (DT.searchQuery) {
+    const q = DT.searchQuery.toLowerCase();
+    rows = rows.filter(r =>
+      r.channel_group.toLowerCase().includes(q) ||
+      r.device_category.toLowerCase().includes(q) ||
+      r.campaign_name.toLowerCase().includes(q) ||
+      r.source_medium.toLowerCase().includes(q) ||
+      r.date.includes(q)
+    );
+  }
+
+  // Sort
+  rows.sort((a, b) => {
+    let va = a[DT.sortCol], vb = b[DT.sortCol];
+    if (typeof va === 'string') {
+      return DT.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return DT.sortDir === 'asc' ? va - vb : vb - va;
+  });
+
+  // Paginate
+  const totalRows = rows.length;
+  const totalPages = Math.ceil(totalRows / DT.perPage) || 1;
+  DT.page = Math.min(DT.page, totalPages);
+  const start = (DT.page - 1) * DT.perPage;
+  const pageRows = rows.slice(start, start + DT.perPage);
+
+  // Render body
+  const tbody = document.getElementById('dtBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = pageRows.map(r => `
+    <tr class="${r.purchase > 0 ? 'has-bookings' : ''}">
+      <td>${r.date}</td>
+      <td>${capitalize(r.device_category)}</td>
+      <td>${escHtml(r.channel_group)}</td>
+      <td class="td-campaign" title="${escHtml(r.campaign_name)}">${escHtml(r.campaign_name)}</td>
+      <td title="${escHtml(r.source_medium)}">${escHtml(r.source_medium)}</td>
+      <td class="num">${formatNumber(r.session_start)}</td>
+      <td class="num">${formatNumber(r.search)}</td>
+      <td class="num">${formatNumber(r.view_item)}</td>
+      <td class="num">${formatNumber(r.begin_checkout)}</td>
+      <td class="num">${formatNumber(r.purchase)}</td>
+      <td class="num">$${formatNumber(Math.round(r.purchase_revenue))}</td>
+      <td class="num">${r.cvr.toFixed(2)}%</td>
+    </tr>
+  `).join('');
+
+  // Row count
+  const countEl = document.getElementById('dtRowCount');
+  if (countEl) countEl.textContent = totalRows.toLocaleString() + ' registros';
+
+  // Page info
+  const pageInfoEl = document.getElementById('dtPageInfo');
+  if (pageInfoEl) {
+    const end = Math.min(start + DT.perPage, totalRows);
+    pageInfoEl.textContent = `${start + 1}–${end} de ${totalRows.toLocaleString()}`;
+  }
+
+  // Pagination
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  const container = document.getElementById('dtPagination');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (totalPages <= 1) return;
+
+  // Prev button
+  const prevBtn = document.createElement('button');
+  prevBtn.textContent = '‹';
+  prevBtn.disabled = DT.page <= 1;
+  prevBtn.addEventListener('click', () => { DT.page--; renderDataTable(COMPUTED.filtered); });
+  container.appendChild(prevBtn);
+
+  // Page buttons (max 7 visible)
+  const maxVisible = 7;
+  let startPage = Math.max(1, DT.page - 3);
+  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+  if (endPage - startPage < maxVisible - 1) startPage = Math.max(1, endPage - maxVisible + 1);
+
+  for (let p = startPage; p <= endPage; p++) {
+    const btn = document.createElement('button');
+    btn.textContent = p;
+    btn.classList.toggle('active', p === DT.page);
+    btn.addEventListener('click', () => { DT.page = p; renderDataTable(COMPUTED.filtered); });
+    container.appendChild(btn);
+  }
+
+  // Next button
+  const nextBtn = document.createElement('button');
+  nextBtn.textContent = '›';
+  nextBtn.disabled = DT.page >= totalPages;
+  nextBtn.addEventListener('click', () => { DT.page++; renderDataTable(COMPUTED.filtered); });
+  container.appendChild(nextBtn);
+}
+
+// ========== CSV EXPORT ==========
+function exportCSV() {
+  const filtered = COMPUTED.filtered;
+  const headers = ['Date', 'Device', 'Channel', 'Campaign', 'Source/Medium', 'Sessions', 'Searches', 'Views', 'Checkout', 'Bookings', 'Revenue', 'CVR%'];
+  const rows = filtered.map(r => [
+    r.date,
+    r.device_category,
+    r.channel_group,
+    '"' + (r.campaign_name || '').replace(/"/g, '""') + '"',
+    '"' + (r.source_medium || '').replace(/"/g, '""') + '"',
+    r.session_start,
+    r.search,
+    r.view_item,
+    r.begin_checkout,
+    r.purchase,
+    r.purchase_revenue.toFixed(2),
+    (r.session_start > 0 ? r.purchase / r.session_start * 100 : 0).toFixed(2),
+  ]);
+
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'despegar_dashboard_export_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ========== PERIOD BADGE ==========
+function updatePeriodBadge(filtered) {
+  const badge = document.getElementById('periodBadgeText');
+  if (!badge || filtered.length === 0) return;
+  const dates = [...new Set(filtered.map(r => r.date))].sort();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  badge.textContent = dates.length === 1 ? formatDateShort(first) : formatDateShort(first) + ' – ' + formatDateShort(last);
+}
+
 // ========== SIDEBAR ==========
-function initSidebar() {
+function bindSidebar() {
   const sidebar = document.getElementById('sidebar');
   const toggleBtn = document.getElementById('sidebarToggle');
   const mobileBtn = document.getElementById('mobileMenuBtn');
@@ -676,8 +909,8 @@ function initSidebar() {
   }
 
   const close = () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); };
-  toggleBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
-  mobileBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
+  if (toggleBtn) toggleBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
+  if (mobileBtn) mobileBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
   overlay.addEventListener('click', close);
 }
 
@@ -690,6 +923,11 @@ function formatK(n) {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
   return Math.round(n).toString();
+}
+function escHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
 }
 function roundedRect(ctx, x, y, w, h, r) {
   if (h <= 0) return;
@@ -704,9 +942,3 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
 }
-
-// ========== FALLBACK DATA ==========
-const FALLBACK_DATA = [
-  {date:"2026-05-31",device_category:"desktop",channel_group:"Direct",session_start:198,search:540,view_item:120,begin_checkout:58,purchase:12,purchase_revenue:3850,user_engagement:490,first_visit:80,page_view:1200,scroll:180,view_search_results:0,click:0,form_start:5,file_download:0},
-  {date:"2026-05-31",device_category:"mobile",channel_group:"Direct",session_start:8500,search:10200,view_item:2200,begin_checkout:700,purchase:100,purchase_revenue:35000,user_engagement:14000,first_visit:5000,page_view:40000,scroll:3500,view_search_results:0,click:5,form_start:2,file_download:1},
-];

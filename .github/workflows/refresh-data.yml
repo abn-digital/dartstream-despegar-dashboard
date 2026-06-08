@@ -30,18 +30,19 @@ jobs:
           bq query \
             --use_legacy_sql=false \
             --format=json \
-            --max_rows=10000 \
+            --max_rows=50000 \
             --project_id=bigquery-388915 \
             "SELECT
               date, device_category, channel_group,
+              IFNULL(campaign_name, '(not set)') as campaign_name,
+              IFNULL(source_medium, '(not set)') as source_medium,
               session_start, search, view_search_results,
               view_item, begin_checkout, purchase, purchase_revenue,
               first_visit, page_view, user_engagement,
-              scroll, click, form_start, file_download,
-              video_start, video_progress, video_complete
+              scroll, click, form_start, file_download
             FROM \`bigquery-388915.despegar_b2b2c.master_results\`
             WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 45 DAY)
-            ORDER BY date, device_category, channel_group" \
+            ORDER BY date DESC, session_start DESC" \
             > data_raw.json 2>/dev/null
 
           ROW_COUNT=$(python3 -c "import json; d=json.load(open('data_raw.json')); print(len(d))")
