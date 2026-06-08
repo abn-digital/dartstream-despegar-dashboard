@@ -1,0 +1,96 @@
+name: Refresh BigQuery Data
+
+on:
+  schedule:
+    # Every day at 08:00 UTC (05:00 ART)
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Query BigQuery and generate data.js
+        run: |
+          echo "Querying BigQuery..."
+          bq query \
+            --use_legacy_sql=false \
+            --format=json \
+            --max_rows=10000 \
+            --project_id=bigquery-388915 \
+            "SELECT
+              date, device_category, channel_group,
+              session_start, search, view_search_results,
+              view_item, begin_checkout, purchase, purchase_revenue,
+              first_visit, page_view, user_engagement,
+              scroll, click, form_start, file_download,
+              video_start, video_progress, video_complete
+            FROM \`bigquery-388915.despegar_b2b2c.master_results\`
+            WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 45 DAY)
+            ORDER BY date, device_category, channel_group" \
+            > data_raw.json 2>/dev/null
+
+          ROW_COUNT=$(python3 -c "import json; d=json.load(open('data_raw.json')); print(len(d))")
+          MIN_DATE=$(python3 -c "import json; d=json.load(open('data_raw.json')); print(min(r['date'] for r in d))")
+          MAX_DATE=$(python3 -c "import json; d=json.load(open('data_raw.json')); print(max(r['date'] for r in d))")
+
+          echo "Rows: $ROW_COUNT | Date range: $MIN_DATE to $MAX_DATE"
+
+          # Generate data.js
+          python3 -c "
+          import json
+          with open('data_raw.json') as f:
+              data = json.load(f)
+          with open('data.js', 'w') as f:
+              f.write('const INLINE_DATA = ')
+              json.dump(data, f, separators=(',', ':'))
+              f.write(';\n')
+          print(f'data.js written with {len(data)} rows')
+          "
+
+          rm data_raw.json
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet data.js; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No data changes detected"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Data changes detected"
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.js
+          ROW_COUNT=$(python3 -c "
+          import json, re
+          with open('data.js') as f:
+              content = f.read()
+          match = re.search(r'const INLINE_DATA = (.+);', content, re.DOTALL)
+          if match:
+              data = json.loads(match.group(1))
+              print(len(data))
+          else:
+              print('N/A')
+          ")
+          git commit -m "data: auto-refresh $(date -u +%Y-%m-%d) — ${ROW_COUNT} rows"
+          git push
