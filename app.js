@@ -1,29 +1,23 @@
-// ========== Despegar B2B2C Dashboard — app.js ==========
-// Macro-to-Micro architecture: Overview → Funnel & Journey → Detalle Táctico
-// Real data from BigQuery: bigquery-388915.despegar_b2b2c.master_results
+// ========== Despegar B2B2C Dashboard — app.js v3 ==========
+// Improvements: Date range filter, Campaigns tab, interactive chart, fixed tooltips
 
 // ========== STATE ==========
 let RAW_DATA = [];
 let currentTab = 'overview';
 
 const FILTERS = {
-  month: 'all',
-  week: 'all',
+  dateFrom: '',
+  dateTo: '',
   device: 'all',
   channel: 'all',
 };
 
-// Cached computed data (recomputed on filter change)
-let COMPUTED = { filtered: [], totals: {}, daily: [], platforms: [] };
+let COMPUTED = { filtered: [], totals: {}, daily: [], platforms: [], campaigns: [] };
 
-// Data table state
-const DT = {
-  sortCol: 'date',
-  sortDir: 'desc',
-  page: 1,
-  perPage: 50,
-  searchQuery: '',
-};
+// Detail table state
+const DT = { sortCol: 'date', sortDir: 'desc', page: 1, perPage: 50, searchQuery: '' };
+// Campaign table state
+const CT = { sortCol: 'purchase_revenue', sortDir: 'desc', page: 1, perPage: 30, searchQuery: '' };
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
@@ -31,7 +25,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindFilters();
   bindTabs();
   bindSidebar();
-  bindDataTable();
+  bindDetailTable();
+  bindCampaignTable();
+  initTooltipSystem();
   recomputeAndRender();
 });
 
@@ -41,13 +37,7 @@ async function loadData() {
   if (typeof INLINE_DATA !== 'undefined') {
     json = INLINE_DATA;
   } else {
-    try {
-      const resp = await fetch('data.json');
-      json = await resp.json();
-    } catch (e) {
-      console.error('Failed to load data', e);
-      json = [];
-    }
+    try { const resp = await fetch('data.json'); json = await resp.json(); } catch (e) { json = []; }
   }
 
   RAW_DATA = json.map(row => ({
@@ -72,9 +62,17 @@ async function loadData() {
     file_download:      num(row.file_download),
   }));
 
-  // Update footer with data freshness
+  // Set date range defaults from data
   const dates = [...new Set(RAW_DATA.map(r => r.date))].sort();
   if (dates.length > 0) {
+    FILTERS.dateFrom = dates[0];
+    FILTERS.dateTo = dates[dates.length - 1];
+
+    const fromInput = document.getElementById('filterDateFrom');
+    const toInput = document.getElementById('filterDateTo');
+    if (fromInput) { fromInput.value = dates[0]; fromInput.min = dates[0]; fromInput.max = dates[dates.length - 1]; }
+    if (toInput) { toInput.value = dates[dates.length - 1]; toInput.min = dates[0]; toInput.max = dates[dates.length - 1]; }
+
     const el = document.getElementById('lastUpdated');
     if (el) el.textContent = 'Hasta ' + formatDateShort(dates[dates.length - 1]);
   }
@@ -83,147 +81,59 @@ async function loadData() {
 // ========== DATE HELPERS ==========
 const MONTH_NAMES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-function getISOWeek(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-}
-
-function parseMonth(dateStr) {
-  return dateStr.substring(0, 7);
-}
-
-function formatMonthLabel(ym) {
-  const [y, m] = ym.split('-');
-  return MONTH_NAMES[parseInt(m)] + ' ' + y;
-}
-
 function formatDateShort(dateStr) {
   const [y, m, d] = dateStr.split('-');
   return parseInt(d) + ' ' + MONTH_NAMES[parseInt(m)] + ' ' + y;
 }
+function formatDateCompact(dateStr) {
+  const [, m, d] = dateStr.split('-');
+  return parseInt(d) + '/' + parseInt(m);
+}
 
 // ========== TAB SYSTEM ==========
 function bindTabs() {
-  // Topbar tabs
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-  });
-  // Sidebar nav items (mirror)
-  document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-  });
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+  document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 }
 
 function switchTab(tabId) {
   currentTab = tabId;
-
-  // Update topbar tab buttons
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tabId);
-  });
-
-  // Update sidebar nav items
-  document.querySelectorAll('.nav-item').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tabId);
-  });
-
-  // Show/hide tab panels
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   const panelId = 'panel' + tabId.charAt(0).toUpperCase() + tabId.slice(1);
-  document.querySelectorAll('.tab-panel').forEach(p => {
-    p.classList.toggle('active', p.id === panelId);
-  });
-
-  // Render the active tab with current data
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === panelId));
   renderActiveTab();
 }
 
 // ========== FILTER BINDING ==========
 function bindFilters() {
-  // --- Populate Month options ---
-  const monthSelect = document.getElementById('filterMonth');
-  if (monthSelect) {
-    const months = [...new Set(RAW_DATA.map(r => parseMonth(r.date)))].sort().reverse();
-    monthSelect.innerHTML = '<option value="all">Mes: Todos</option>';
-    months.forEach(ym => {
-      const opt = document.createElement('option');
-      opt.value = ym;
-      opt.textContent = formatMonthLabel(ym);
-      monthSelect.appendChild(opt);
-    });
-    monthSelect.addEventListener('change', () => {
-      FILTERS.month = monthSelect.value;
-      onFilterChange();
-    });
-  }
+  // Date range
+  const fromInput = document.getElementById('filterDateFrom');
+  const toInput = document.getElementById('filterDateTo');
+  if (fromInput) fromInput.addEventListener('change', () => { FILTERS.dateFrom = fromInput.value; onFilterChange(); });
+  if (toInput) toInput.addEventListener('change', () => { FILTERS.dateTo = toInput.value; onFilterChange(); });
 
-  // --- Populate Week options ---
-  const weekSelect = document.getElementById('filterWeek');
-  if (weekSelect) {
-    const weeksSet = new Map();
-    RAW_DATA.forEach(r => {
-      const wn = getISOWeek(r.date);
-      const key = 'W' + wn;
-      if (!weeksSet.has(key)) weeksSet.set(key, wn);
-    });
-    const weeks = [...weeksSet.entries()].sort((a, b) => b[1] - a[1]);
-    weekSelect.innerHTML = '<option value="all">Semana: Todas</option>';
-    weeks.forEach(([label]) => {
-      const opt = document.createElement('option');
-      opt.value = label;
-      opt.textContent = label;
-      weekSelect.appendChild(opt);
-    });
-    weekSelect.addEventListener('change', () => {
-      FILTERS.week = weekSelect.value;
-      onFilterChange();
-    });
-  }
-
-  // --- Device filter ---
+  // Device
   const deviceSelect = document.getElementById('filterDevice');
-  if (deviceSelect) {
-    deviceSelect.addEventListener('change', () => {
-      FILTERS.device = deviceSelect.value;
-      onFilterChange();
-    });
-  }
+  if (deviceSelect) deviceSelect.addEventListener('change', () => { FILTERS.device = deviceSelect.value; onFilterChange(); });
 
-  // --- Channel filter (populate dynamically) ---
+  // Channel (dynamic)
   const channelSelect = document.getElementById('filterChannel');
   if (channelSelect) {
     const channels = [...new Set(RAW_DATA.map(r => r.channel_group))].sort();
     channelSelect.innerHTML = '<option value="all">Canal: Todos</option>';
-    channels.forEach(ch => {
-      const opt = document.createElement('option');
-      opt.value = ch.toLowerCase();
-      opt.textContent = ch;
-      channelSelect.appendChild(opt);
-    });
-    channelSelect.addEventListener('change', () => {
-      FILTERS.channel = channelSelect.value;
-      onFilterChange();
-    });
+    channels.forEach(ch => { const opt = document.createElement('option'); opt.value = ch.toLowerCase(); opt.textContent = ch; channelSelect.appendChild(opt); });
+    channelSelect.addEventListener('change', () => { FILTERS.channel = channelSelect.value; onFilterChange(); });
   }
 }
 
 // ========== FILTER DATA ==========
 function getFilteredData() {
   return RAW_DATA.filter(row => {
-    if (FILTERS.month !== 'all') {
-      if (parseMonth(row.date) !== FILTERS.month) return false;
-    }
-    if (FILTERS.week !== 'all') {
-      const rowWeek = 'W' + getISOWeek(row.date);
-      if (rowWeek !== FILTERS.week) return false;
-    }
-    if (FILTERS.device !== 'all') {
-      if (row.device_category !== FILTERS.device) return false;
-    }
-    if (FILTERS.channel !== 'all') {
-      if (row.channel_group.toLowerCase() !== FILTERS.channel) return false;
-    }
+    if (FILTERS.dateFrom && row.date < FILTERS.dateFrom) return false;
+    if (FILTERS.dateTo && row.date > FILTERS.dateTo) return false;
+    if (FILTERS.device !== 'all' && row.device_category !== FILTERS.device) return false;
+    if (FILTERS.channel !== 'all' && row.channel_group.toLowerCase() !== FILTERS.channel) return false;
     return true;
   });
 }
@@ -234,62 +144,41 @@ function recomputeAndRender() {
   COMPUTED.totals = aggregate(COMPUTED.filtered);
   COMPUTED.daily = aggregateByDate(COMPUTED.filtered);
   COMPUTED.platforms = aggregateByDevice(COMPUTED.filtered);
-  updatePeriodBadge(COMPUTED.filtered);
+  COMPUTED.campaigns = aggregateByCampaign(COMPUTED.filtered);
   renderActiveTab();
 }
 
 function onFilterChange() {
-  DT.page = 1; // Reset pagination on filter change
+  DT.page = 1;
+  CT.page = 1;
   recomputeAndRender();
 }
 
 function renderActiveTab() {
-  const { filtered, totals, daily, platforms } = COMPUTED;
-
-  if (currentTab === 'overview') {
-    renderBANs(totals);
-    renderPlatformLegend(platforms);
-    renderDonutChart(platforms);
-    renderCVRSummary(totals, daily);
-  } else if (currentTab === 'funnel') {
-    renderFunnel(totals, daily);
-    // Delay canvas render to ensure container is visible
-    requestAnimationFrame(() => renderEvolutionChart(daily));
-  } else if (currentTab === 'detail') {
-    renderDataTable(filtered);
-  }
+  const { filtered, totals, daily, platforms, campaigns } = COMPUTED;
+  if (currentTab === 'overview') { renderBANs(totals); renderPlatformLegend(platforms); renderDonutChart(platforms); renderCVRSummary(totals, daily); }
+  else if (currentTab === 'funnel') { renderFunnel(totals, daily); requestAnimationFrame(() => renderEvolutionChart(daily)); }
+  else if (currentTab === 'campaigns') { renderCampaignBars(campaigns); renderCampaignTable(campaigns); }
+  else if (currentTab === 'detail') { renderDataTable(filtered); }
 }
 
 // ========== AGGREGATE ==========
 function aggregate(data) {
-  const totals = {
-    session_start: 0, first_visit: 0, page_view: 0, search: 0,
-    view_search_results: 0, view_item: 0, begin_checkout: 0,
-    purchase: 0, purchase_revenue: 0, user_engagement: 0,
-    scroll: 0, click: 0, form_start: 0, file_download: 0,
-  };
-  data.forEach(row => {
-    Object.keys(totals).forEach(k => { totals[k] += row[k]; });
-  });
-  totals.asp = totals.purchase > 0 ? totals.purchase_revenue / totals.purchase : 0;
-  totals.cvr = totals.session_start > 0 ? totals.purchase / totals.session_start * 100 : 0;
-  totals.margin = totals.purchase_revenue * 0.0224;
-  return totals;
+  const t = { session_start:0, first_visit:0, page_view:0, search:0, view_search_results:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0, user_engagement:0, scroll:0, click:0, form_start:0, file_download:0 };
+  data.forEach(row => Object.keys(t).forEach(k => { t[k] += row[k]; }));
+  t.asp = t.purchase > 0 ? t.purchase_revenue / t.purchase : 0;
+  t.cvr = t.session_start > 0 ? t.purchase / t.session_start * 100 : 0;
+  t.margin = t.purchase_revenue * 0.0224;
+  return t;
 }
 
 function aggregateByDate(data) {
   const byDate = {};
   data.forEach(row => {
-    if (!byDate[row.date]) {
-      byDate[row.date] = { date: row.date, session_start: 0, search: 0, view_item: 0, begin_checkout: 0, purchase: 0, purchase_revenue: 0 };
-    }
+    if (!byDate[row.date]) byDate[row.date] = { date: row.date, session_start:0, search:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0 };
     const d = byDate[row.date];
-    d.session_start += row.session_start;
-    d.search += row.search;
-    d.view_item += row.view_item;
-    d.begin_checkout += row.begin_checkout;
-    d.purchase += row.purchase;
-    d.purchase_revenue += row.purchase_revenue;
+    d.session_start += row.session_start; d.search += row.search; d.view_item += row.view_item;
+    d.begin_checkout += row.begin_checkout; d.purchase += row.purchase; d.purchase_revenue += row.purchase_revenue;
   });
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -298,39 +187,47 @@ function aggregateByDevice(data) {
   const byDev = {};
   data.forEach(row => {
     const dev = row.device_category;
-    if (!byDev[dev]) byDev[dev] = { label: capitalize(dev), bookings: 0, revenue: 0, sessions: 0 };
-    byDev[dev].bookings += row.purchase;
-    byDev[dev].revenue += row.purchase_revenue;
-    byDev[dev].sessions += row.session_start;
+    if (!byDev[dev]) byDev[dev] = { label: capitalize(dev), bookings:0, revenue:0, sessions:0 };
+    byDev[dev].bookings += row.purchase; byDev[dev].revenue += row.purchase_revenue; byDev[dev].sessions += row.session_start;
   });
   return Object.values(byDev).sort((a, b) => b.bookings - a.bookings);
 }
 
-// ========== RENDER BANs (Overview) ==========
+function aggregateByCampaign(data) {
+  const byCamp = {};
+  data.forEach(row => {
+    const key = row.campaign_name + '||' + row.source_medium;
+    if (!byCamp[key]) byCamp[key] = { campaign_name: row.campaign_name, source_medium: row.source_medium, session_start:0, search:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0 };
+    const c = byCamp[key];
+    c.session_start += row.session_start; c.search += row.search; c.view_item += row.view_item;
+    c.begin_checkout += row.begin_checkout; c.purchase += row.purchase; c.purchase_revenue += row.purchase_revenue;
+  });
+  return Object.values(byCamp).map(c => ({
+    ...c,
+    cvr: c.session_start > 0 ? c.purchase / c.session_start * 100 : 0,
+    asp: c.purchase > 0 ? c.purchase_revenue / c.purchase : 0,
+  })).sort((a, b) => b.purchase_revenue - a.purchase_revenue);
+}
+
+// ========== RENDER BANs ==========
 function renderBANs(totals) {
   const items = [
-    { id: 'banGBValue',     value: totals.purchase_revenue, prefix: '$', decimals: 0 },
-    { id: 'banMarginValue', value: totals.margin,           prefix: '$', decimals: 0 },
-    { id: 'banOrdersValue', value: totals.purchase,         prefix: '',  decimals: 0 },
-    { id: 'banASPValue',    value: totals.asp,              prefix: '$', decimals: 0 },
+    { id: 'banGBValue', value: totals.purchase_revenue, prefix: '$' },
+    { id: 'banMarginValue', value: totals.margin, prefix: '$' },
+    { id: 'banOrdersValue', value: totals.purchase, prefix: '' },
+    { id: 'banASPValue', value: totals.asp, prefix: '$' },
   ];
-
   items.forEach(item => {
     const el = document.getElementById(item.id);
     if (el) {
       el.textContent = item.prefix + formatNumber(Math.round(item.value));
-      // Animate
-      el.style.transition = 'none';
-      el.style.opacity = '0.4';
-      requestAnimationFrame(() => {
-        el.style.transition = 'opacity 0.3s ease';
-        el.style.opacity = '1';
-      });
+      el.style.transition = 'none'; el.style.opacity = '0.4';
+      requestAnimationFrame(() => { el.style.transition = 'opacity 0.3s ease'; el.style.opacity = '1'; });
     }
   });
 }
 
-// ========== RENDER CVR SUMMARY (Overview) ==========
+// ========== RENDER CVR SUMMARY ==========
 function renderCVRSummary(totals, daily) {
   const cvrHero = document.getElementById('cvrHeroValue');
   if (cvrHero) cvrHero.textContent = totals.cvr.toFixed(2) + '%';
@@ -343,17 +240,26 @@ function renderCVRSummary(totals, daily) {
 
   if (daily.length > 0) {
     const firstDay = daily[0];
-    const firstDayCvr = firstDay.session_start > 0 ? firstDay.purchase / firstDay.session_start * 100 : 0;
+    const lastDay = daily[daily.length - 1];
+    const firstCvr = firstDay.session_start > 0 ? firstDay.purchase / firstDay.session_start * 100 : 0;
+    const lastCvr = lastDay.session_start > 0 ? lastDay.purchase / lastDay.session_start * 100 : 0;
 
-    const cvrFirstEl = document.getElementById('cvrFirstDate');
-    if (cvrFirstEl) cvrFirstEl.textContent = firstDayCvr.toFixed(2) + '%';
+    const startLabel = document.getElementById('cvrStartLabel');
+    if (startLabel) startLabel.textContent = 'CVR ' + formatDateShort(firstDay.date);
+    const startValue = document.getElementById('cvrStartValue');
+    if (startValue) startValue.textContent = firstCvr.toFixed(2) + '%';
 
-    const vsFirstEl = document.getElementById('cvrVsFirst');
-    if (vsFirstEl) {
-      const delta = firstDayCvr > 0 ? ((totals.cvr - firstDayCvr) / firstDayCvr * 100).toFixed(1) : '0.0';
+    const endLabel = document.getElementById('cvrEndLabel');
+    if (endLabel) endLabel.textContent = 'CVR ' + formatDateShort(lastDay.date);
+    const endValue = document.getElementById('cvrEndValue');
+    if (endValue) endValue.textContent = lastCvr.toFixed(2) + '%';
+
+    const deltaEl = document.getElementById('cvrDelta');
+    if (deltaEl) {
+      const delta = firstCvr > 0 ? ((totals.cvr - firstCvr) / firstCvr * 100).toFixed(1) : '0.0';
       const sign = parseFloat(delta) >= 0 ? '+' : '';
-      vsFirstEl.textContent = sign + delta + '%';
-      vsFirstEl.className = 'cvr-meta-value ' + (parseFloat(delta) < 0 ? 'negative' : 'positive');
+      deltaEl.textContent = sign + delta + '%';
+      deltaEl.className = 'cvr-meta-value ' + (parseFloat(delta) < 0 ? 'negative' : 'positive');
     }
   }
 }
@@ -362,15 +268,13 @@ function renderCVRSummary(totals, daily) {
 function renderFunnel(totals, daily) {
   const steps = [
     { name: 'Usuarios (Sessions)', count: totals.session_start },
-    { name: 'Searchers',           count: totals.search },
-    { name: 'Detail (View Item)',   count: totals.view_item },
-    { name: 'Checkout',            count: totals.begin_checkout },
+    { name: 'Searchers', count: totals.search },
+    { name: 'Detail (View Item)', count: totals.view_item },
+    { name: 'Checkout', count: totals.begin_checkout },
     { name: 'Bookings (Purchase)', count: totals.purchase },
   ];
-
   const colors = ['#540CEC', '#7A0FD6', '#9D17C9', '#C42B6B', '#E5337A'];
   const total = steps[0].count || 1;
-
   const funnelChart = document.getElementById('funnelChart');
   if (!funnelChart) return;
   funnelChart.innerHTML = '';
@@ -378,21 +282,13 @@ function renderFunnel(totals, daily) {
   steps.forEach((step, i) => {
     const pct = step.count / total * 100;
     const visualWidth = pct < 3 ? Math.max(pct * 6, 3) : pct;
-
     const stepEl = document.createElement('div');
     stepEl.className = 'funnel-step funnel-step-animated';
     stepEl.style.animationDelay = (i * 0.08) + 's';
     stepEl.innerHTML = `
-      <div class="funnel-step-label">
-        <span class="funnel-step-name">${step.name}</span>
-        <span class="funnel-step-count">${formatNumber(step.count)}</span>
-      </div>
-      <div class="funnel-bar-track">
-        <div class="funnel-bar ${i === steps.length - 1 ? 'funnel-bar-final' : ''}"
-             style="width: ${visualWidth}%; --color: ${colors[i]};"></div>
-      </div>
-      <span class="funnel-pct">${pct.toFixed(1)}%</span>
-    `;
+      <div class="funnel-step-label"><span class="funnel-step-name">${step.name}</span><span class="funnel-step-count">${formatNumber(step.count)}</span></div>
+      <div class="funnel-bar-track"><div class="funnel-bar ${i === steps.length - 1 ? 'funnel-bar-final' : ''}" style="width:${visualWidth}%;--color:${colors[i]};"></div></div>
+      <span class="funnel-pct">${pct.toFixed(1)}%</span>`;
     funnelChart.appendChild(stepEl);
 
     if (i < steps.length - 1) {
@@ -400,57 +296,43 @@ function renderFunnel(totals, daily) {
       const drop = step.count > 0 ? ((step.count - nextCount) / step.count * 100).toFixed(1) : '0.0';
       const dropEl = document.createElement('div');
       dropEl.className = 'funnel-drop-indicator';
-      dropEl.innerHTML = `
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        <span class="funnel-drop-text">-${drop}% drop</span>
-      `;
+      dropEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg><span class="funnel-drop-text">-${drop}% drop</span>`;
       funnelChart.appendChild(dropEl);
     }
   });
 
   // CVR Strip
-  const cvrLW = document.getElementById('cvrLW');
-  const cvrActual = document.getElementById('cvrActual');
-  const cvrVsLW = document.getElementById('cvrVsLW');
-
-  if (cvrLW && cvrActual && cvrVsLW && daily.length > 0) {
-    const firstDayCvr = daily[0].session_start > 0 ? daily[0].purchase / daily[0].session_start * 100 : 0;
+  if (daily.length > 0) {
+    const firstCvr = daily[0].session_start > 0 ? daily[0].purchase / daily[0].session_start * 100 : 0;
     const overallCvr = totals.cvr;
-    const vsLw = firstDayCvr > 0 ? ((overallCvr - firstDayCvr) / firstDayCvr * 100).toFixed(1) : '0.0';
+    const vsLw = firstCvr > 0 ? ((overallCvr - firstCvr) / firstCvr * 100).toFixed(1) : '0.0';
 
-    cvrLW.textContent = firstDayCvr.toFixed(2) + '%';
-    cvrActual.textContent = overallCvr.toFixed(2) + '%';
-    cvrVsLW.textContent = (parseFloat(vsLw) >= 0 ? '+' : '') + vsLw + '%';
-    cvrVsLW.className = 'cvr-chip-value ' + (parseFloat(vsLw) < 0 ? 'negative' : 'positive');
+    const cvrLW = document.getElementById('cvrLW');
+    const cvrActual = document.getElementById('cvrActual');
+    const cvrVsLW = document.getElementById('cvrVsLW');
+    if (cvrLW) cvrLW.textContent = firstCvr.toFixed(2) + '%';
+    if (cvrActual) cvrActual.textContent = overallCvr.toFixed(2) + '%';
+    if (cvrVsLW) {
+      cvrVsLW.textContent = (parseFloat(vsLw) >= 0 ? '+' : '') + vsLw + '%';
+      cvrVsLW.className = 'cvr-chip-value ' + (parseFloat(vsLw) < 0 ? 'negative' : 'positive');
+    }
   }
 }
 
-// ========== RENDER PLATFORM LEGEND ==========
+// ========== PLATFORM LEGEND ==========
 function renderPlatformLegend(platforms) {
   const colors = ['#540CEC', '#9D17C9', '#E5337A', '#FF7A33'];
   const totalBookings = platforms.reduce((s, p) => s + p.bookings, 0) || 1;
-
   const centerVal = document.getElementById('donutCenterValue');
   if (centerVal) centerVal.textContent = formatK(totalBookings);
-
   const legendContainer = document.getElementById('platformLegend');
   if (!legendContainer) return;
   legendContainer.innerHTML = '';
-
   platforms.forEach((p, i) => {
     const pct = (p.bookings / totalBookings * 100).toFixed(1);
     const item = document.createElement('div');
     item.className = 'legend-item';
-    item.innerHTML = `
-      <div class="legend-color" style="background: ${colors[i % colors.length]};"></div>
-      <div class="legend-info">
-        <div class="legend-name">${p.label}</div>
-        <div class="legend-detail">
-          <span class="legend-value">${formatK(p.bookings)}</span>
-          <span class="legend-pct">${pct}%</span>
-        </div>
-      </div>
-    `;
+    item.innerHTML = `<div class="legend-color" style="background:${colors[i%colors.length]}"></div><div class="legend-info"><div class="legend-name">${p.label}</div><div class="legend-detail"><span class="legend-value">${formatK(p.bookings)}</span><span class="legend-pct">${pct}%</span></div></div>`;
     legendContainer.appendChild(item);
   });
 }
@@ -459,335 +341,355 @@ function renderPlatformLegend(platforms) {
 let donutAnimId = null;
 function renderDonutChart(platforms) {
   if (donutAnimId) cancelAnimationFrame(donutAnimId);
-
   const canvas = document.getElementById('donutChart');
   if (!canvas) return;
-
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const size = 200;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  canvas.style.width = size + 'px';
-  canvas.style.height = size + 'px';
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.scale(dpr, dpr);
+  canvas.width = size * dpr; canvas.height = size * dpr;
+  canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+  ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr, dpr);
 
   const colors = ['#540CEC', '#9D17C9', '#E5337A', '#FF7A33'];
   const totalBookings = platforms.reduce((s, p) => s + p.bookings, 0) || 1;
-  const segments = platforms.map((p, i) => ({
-    value: p.bookings / totalBookings * 100,
-    color: colors[i % colors.length],
-  }));
-
-  const cx = size / 2, cy = size / 2;
-  const outerR = 90, innerR = 62, gap = 0.04;
+  const segments = platforms.map((p, i) => ({ value: p.bookings / totalBookings * 100, color: colors[i % colors.length] }));
+  const cx = size/2, cy = size/2, outerR = 90, innerR = 62, gap = 0.04;
   const total = segments.reduce((s, d) => s + d.value, 0) || 1;
-
   let startTime = null;
 
-  function drawDonut(timestamp) {
-    if (!startTime) startTime = timestamp;
-    const progress = Math.min((timestamp - startTime) / 800, 1);
+  function drawDonut(ts) {
+    if (!startTime) startTime = ts;
+    const progress = Math.min((ts - startTime) / 800, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
-
     ctx.clearRect(0, 0, size, size);
     let angle = -Math.PI / 2;
-
     segments.forEach(seg => {
       const segAngle = (seg.value / total) * 2 * Math.PI * eased;
-      const sA = angle + gap / 2;
-      const eA = angle + segAngle - gap / 2;
-
+      const sA = angle + gap/2, eA = angle + segAngle - gap/2;
       if (segAngle > gap) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, outerR, sA, eA);
-        ctx.arc(cx, cy, innerR, eA, sA, true);
-        ctx.closePath();
-        ctx.fillStyle = seg.color;
-        ctx.fill();
-
-        ctx.save();
-        ctx.globalCompositeOperation = 'source-atop';
-        ctx.beginPath();
-        ctx.arc(cx, cy, outerR, sA, eA);
-        ctx.arc(cx, cy, innerR, eA, sA, true);
-        ctx.closePath();
-        const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
-        grad.addColorStop(0, 'rgba(255,255,255,0.15)');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
-        ctx.fill();
-        ctx.restore();
+        ctx.beginPath(); ctx.arc(cx, cy, outerR, sA, eA); ctx.arc(cx, cy, innerR, eA, sA, true); ctx.closePath(); ctx.fillStyle = seg.color; ctx.fill();
       }
       angle += segAngle;
     });
-
     if (progress < 1) donutAnimId = requestAnimationFrame(drawDonut);
   }
-
   donutAnimId = requestAnimationFrame(drawDonut);
 }
 
-// ========== EVOLUTION CHART ==========
-let evoAnimId = null;
-function renderEvolutionChart(daily) {
-  if (evoAnimId) cancelAnimationFrame(evoAnimId);
+// ========== INTERACTIVE EVOLUTION CHART ==========
+let evoChart = null; // stores geometry for interaction
 
+function renderEvolutionChart(daily) {
   const canvas = document.getElementById('evolutionChart');
   if (!canvas) return;
-
+  const container = document.getElementById('evolutionContainer');
+  const tooltip = document.getElementById('chartTooltip');
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
-  const container = canvas.parentElement;
   const w = container.clientWidth;
-  const h = 280;
+  const h = 320;
 
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.scale(dpr, dpr);
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr, dpr);
 
   if (daily.length === 0) {
-    ctx.fillStyle = '#8E8AA3';
-    ctx.font = '500 14px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Sin datos para este filtro', w / 2, h / 2);
+    ctx.fillStyle = '#8E8AA3'; ctx.font = '500 14px Inter, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Sin datos para este filtro', w/2, h/2);
     return;
   }
 
-  const days = daily.map(d => {
-    const parts = d.date.split('-');
-    return parseInt(parts[2]) + ' ' + MONTH_NAMES[parseInt(parts[1])];
-  });
   const searches = daily.map(d => d.search);
   const cvr = daily.map(d => d.session_start > 0 ? d.purchase / d.session_start * 100 : 0);
-
-  const pad = { top: 44, right: 56, bottom: 50, left: 56 };
+  const pad = { top: 44, right: 60, bottom: 56, left: 60 };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;
   const maxSearchers = Math.max(...searches) * 1.2 || 1;
   const maxCvr = Math.max(...cvr) * 1.4 || 1;
-  const barWidth = Math.min(chartW / days.length * 0.5, 44);
+  const barWidth = Math.min(chartW / daily.length * 0.55, 40);
+  const labelStep = Math.max(1, Math.ceil(daily.length / 14));
 
-  let startTime = null;
+  // Store geometry for interaction
+  const geo = { bars: [], points: [], daily, searches, cvr, w, h, pad, chartW, chartH, maxSearchers, maxCvr, barWidth, labelStep };
 
-  function draw(timestamp) {
-    if (!startTime) startTime = timestamp;
-    const progress = Math.min((timestamp - startTime) / 800, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-
+  function drawChart(highlightIdx) {
     ctx.clearRect(0, 0, w, h);
 
-    // Grid
-    ctx.strokeStyle = 'rgba(20,28,44,0.06)';
-    ctx.lineWidth = 1;
+    // Grid lines
+    ctx.strokeStyle = 'rgba(20,28,44,0.06)'; ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (chartH / 4) * i;
-      ctx.beginPath();
-      ctx.moveTo(pad.left, y);
-      ctx.lineTo(w - pad.right, y);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
     }
 
-    // Y left
-    ctx.fillStyle = '#8E8AA3';
-    ctx.font = '500 10px Inter, sans-serif';
-    ctx.textAlign = 'right';
+    // Y-axis left labels (searches)
+    ctx.fillStyle = '#8E8AA3'; ctx.font = '500 10px Inter, sans-serif'; ctx.textAlign = 'right';
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (chartH / 4) * i;
       ctx.fillText(formatK(maxSearchers - (maxSearchers / 4) * i), pad.left - 8, y + 3);
     }
 
-    // Y right
+    // Y-axis right labels (CVR)
     ctx.textAlign = 'left';
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (chartH / 4) * i;
-      ctx.fillText((maxCvr - (maxCvr / 4) * i).toFixed(2) + '%', w - pad.right + 8, y + 3);
+      ctx.fillText((maxCvr - (maxCvr / 4) * i).toFixed(1) + '%', w - pad.right + 8, y + 3);
     }
 
     const points = [];
-    days.forEach((day, i) => {
-      const x = pad.left + (chartW / days.length) * (i + 0.5);
-      const barH = (searches[i] / maxSearchers) * chartH * eased;
+    daily.forEach((d, i) => {
+      const x = pad.left + (chartW / daily.length) * (i + 0.5);
+      const barH = (searches[i] / maxSearchers) * chartH;
       const barY = pad.top + chartH - barH;
+      const isActive = highlightIdx === i;
+      const dimmed = highlightIdx >= 0 && !isActive;
 
-      const grad = ctx.createLinearGradient(0, barY, 0, pad.top + chartH);
-      grad.addColorStop(0, '#540CEC');
-      grad.addColorStop(1, '#7A0FD6');
-      ctx.fillStyle = grad;
-      roundedRect(ctx, x - barWidth / 2, barY, barWidth, barH, 5);
-      ctx.fill();
-
-      if (progress > 0.5) {
-        ctx.fillStyle = '#141C2C';
-        ctx.font = '600 9px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.globalAlpha = Math.min((progress - 0.5) * 2, 1);
-        ctx.fillText(formatK(searches[i]), x, barY - 6);
-        ctx.globalAlpha = 1;
+      // Vertical crosshair for active bar
+      if (isActive) {
+        ctx.save();
+        ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(84,12,236,0.2)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + chartH); ctx.stroke();
+        ctx.setLineDash([]); ctx.restore();
       }
 
-      ctx.fillStyle = '#8E8AA3';
-      ctx.font = '600 10px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(day, x, pad.top + chartH + 18);
+      // Bar
+      ctx.globalAlpha = dimmed ? 0.25 : 1;
+      const grad = ctx.createLinearGradient(0, barY, 0, pad.top + chartH);
+      grad.addColorStop(0, isActive ? '#7A0FD6' : '#540CEC');
+      grad.addColorStop(1, isActive ? '#9D17C9' : '#7A0FD6');
+      ctx.fillStyle = grad;
+      roundedRect(ctx, x - barWidth/2, barY, barWidth, barH, 4);
+      ctx.fill();
+      ctx.globalAlpha = 1;
 
-      points.push({ x, y: pad.top + chartH - (cvr[i] / maxCvr) * chartH * eased });
+      // Date label — only show every Nth or if active
+      if (i % labelStep === 0 || isActive) {
+        ctx.fillStyle = isActive ? '#540CEC' : '#8E8AA3';
+        ctx.font = (isActive ? '700' : '500') + ' 10px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(formatDateCompact(d.date), x, pad.top + chartH + 18);
+      }
+
+      const cvrY = pad.top + chartH - (cvr[i] / maxCvr) * chartH;
+      points.push({ x, y: cvrY });
+      geo.bars[i] = { x, barY, barW: barWidth, barH };
+      geo.points[i] = { x, y: cvrY };
     });
 
     // CVR line
-    ctx.beginPath();
-    ctx.strokeStyle = '#E5337A';
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.strokeStyle = '#E5337A'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     points.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
     ctx.stroke();
 
+    // CVR dots
     points.forEach((pt, i) => {
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(229,51,122,0.12)';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#E5337A';
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      if (progress > 0.6) {
-        ctx.fillStyle = '#E5337A';
-        ctx.font = '700 9px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.globalAlpha = Math.min((progress - 0.6) * 2.5, 1);
-        ctx.fillText(cvr[i].toFixed(2) + '%', pt.x, pt.y - 12);
-        ctx.globalAlpha = 1;
-      }
+      const isActive = highlightIdx === i;
+      const dimmed = highlightIdx >= 0 && !isActive;
+      ctx.globalAlpha = dimmed ? 0.2 : 1;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, isActive ? 7 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = isActive ? 'rgba(229,51,122,0.15)' : 'rgba(229,51,122,0.1)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, isActive ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#E5337A'; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.globalAlpha = 1;
     });
 
-    // Legend
-    ctx.fillStyle = '#540CEC';
-    ctx.fillRect(pad.left, h - 14, 12, 8);
-    ctx.fillStyle = '#56526A';
-    ctx.font = '600 10px Inter, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Búsquedas', pad.left + 16, h - 7);
-
-    ctx.beginPath();
-    ctx.moveTo(pad.left + 100, h - 10);
-    ctx.lineTo(pad.left + 114, h - 10);
-    ctx.strokeStyle = '#E5337A';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(pad.left + 107, h - 10, 3, 0, Math.PI * 2);
-    ctx.fillStyle = '#E5337A';
-    ctx.fill();
-    ctx.fillStyle = '#56526A';
-    ctx.fillText('CVR %', pad.left + 120, h - 7);
-
-    if (progress < 1) evoAnimId = requestAnimationFrame(draw);
+    // Legend at bottom
+    const legendY = h - 10;
+    ctx.fillStyle = '#540CEC'; ctx.fillRect(pad.left, legendY - 6, 12, 8);
+    ctx.fillStyle = '#56526A'; ctx.font = '600 10px Inter, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Búsquedas', pad.left + 16, legendY);
+    ctx.beginPath(); ctx.moveTo(pad.left + 100, legendY - 2); ctx.lineTo(pad.left + 114, legendY - 2);
+    ctx.strokeStyle = '#E5337A'; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(pad.left + 107, legendY - 2, 3, 0, Math.PI * 2); ctx.fillStyle = '#E5337A'; ctx.fill();
+    ctx.fillStyle = '#56526A'; ctx.fillText('CVR %', pad.left + 120, legendY);
   }
 
-  evoAnimId = requestAnimationFrame(draw);
+  // Initial draw (no highlight)
+  drawChart(-1);
 
+  // Mouse interaction
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    let closestIdx = -1, minDist = Infinity;
+    geo.bars.forEach((bar, i) => {
+      const dist = Math.abs(bar.x - mouseX);
+      if (dist < minDist) { minDist = dist; closestIdx = i; }
+    });
+
+    const maxDist = chartW / daily.length * 0.7;
+    if (closestIdx >= 0 && minDist < maxDist) {
+      drawChart(closestIdx);
+      const d = daily[closestIdx];
+      tooltip.innerHTML = `
+        <div class="ct-date">${formatDateShort(d.date)}</div>
+        <div class="ct-row"><span class="ct-dot" style="background:#540CEC"></span>Búsquedas<strong>${formatNumber(searches[closestIdx])}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#E5337A"></span>CVR<strong>${cvr[closestIdx].toFixed(2)}%</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#9D17C9"></span>Bookings<strong>${formatNumber(d.purchase)}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#12B886"></span>Revenue<strong>$${formatNumber(Math.round(d.purchase_revenue))}</strong></div>
+      `;
+      tooltip.style.display = 'block';
+      let tipX = e.clientX - rect.left + 16;
+      let tipY = e.clientY - rect.top - 80;
+      if (tipX + 190 > rect.width) tipX = e.clientX - rect.left - 200;
+      if (tipY < 0) tipY = 10;
+      tooltip.style.left = tipX + 'px';
+      tooltip.style.top = tipY + 'px';
+    } else {
+      drawChart(-1);
+      tooltip.style.display = 'none';
+    }
+  };
+
+  canvas.onmouseleave = () => { drawChart(-1); tooltip.style.display = 'none'; };
+
+  // Resize
   if (!canvas._resizeBound) {
     canvas._resizeBound = true;
     let rt;
-    window.addEventListener('resize', () => {
-      clearTimeout(rt);
-      rt = setTimeout(() => {
-        if (currentTab === 'funnel') renderEvolutionChart(COMPUTED.daily);
-      }, 200);
-    });
+    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (currentTab === 'funnel') renderEvolutionChart(COMPUTED.daily); }, 200); });
   }
 }
 
-// ========== DATA TABLE (Nivel 4) ==========
-function bindDataTable() {
-  // Sort headers
-  document.querySelectorAll('.data-table th.sortable').forEach(th => {
+// ========== CAMPAIGN BARS (Top 10) ==========
+function renderCampaignBars(campaigns) {
+  const container = document.getElementById('campaignBars');
+  if (!container) return;
+
+  // Aggregate by campaign_name only (sum across sources)
+  const byCampName = {};
+  campaigns.forEach(c => {
+    if (!byCampName[c.campaign_name]) byCampName[c.campaign_name] = { campaign_name: c.campaign_name, purchase_revenue: 0, purchase: 0, session_start: 0 };
+    byCampName[c.campaign_name].purchase_revenue += c.purchase_revenue;
+    byCampName[c.campaign_name].purchase += c.purchase;
+    byCampName[c.campaign_name].session_start += c.session_start;
+  });
+  const top10 = Object.values(byCampName).sort((a, b) => b.purchase_revenue - a.purchase_revenue).slice(0, 10);
+  const maxRev = top10[0]?.purchase_revenue || 1;
+
+  container.innerHTML = top10.map((c, i) => {
+    const pct = (c.purchase_revenue / maxRev * 100).toFixed(1);
+    return `
+      <div class="campaign-bar-row" style="animation-delay:${i * 0.05}s" title="${escHtml(c.campaign_name)}">
+        <div class="campaign-bar-name">${escHtml(c.campaign_name)}</div>
+        <div class="campaign-bar-track"><div class="campaign-bar-fill" style="width:${pct}%"></div></div>
+        <div class="campaign-bar-revenue">$${formatK(c.purchase_revenue)}</div>
+        <div class="campaign-bar-bookings">${formatNumber(c.purchase)} bkgs</div>
+      </div>`;
+  }).join('');
+}
+
+// ========== CAMPAIGN TABLE ==========
+function bindCampaignTable() {
+  document.querySelectorAll('[data-table="ct"].sortable').forEach(th => {
     th.addEventListener('click', () => {
       const col = th.dataset.sort;
-      if (DT.sortCol === col) {
-        DT.sortDir = DT.sortDir === 'asc' ? 'desc' : 'asc';
-      } else {
-        DT.sortCol = col;
-        DT.sortDir = 'desc';
-      }
-      // Update header classes
-      document.querySelectorAll('.data-table th').forEach(h => {
-        h.classList.remove('sorted-asc', 'sorted-desc');
-      });
+      if (CT.sortCol === col) CT.sortDir = CT.sortDir === 'asc' ? 'desc' : 'asc';
+      else { CT.sortCol = col; CT.sortDir = 'desc'; }
+      document.querySelectorAll('[data-table="ct"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+      th.classList.add(CT.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      renderCampaignTable(COMPUTED.campaigns);
+    });
+  });
+  const searchInput = document.getElementById('ctSearch');
+  if (searchInput) {
+    let debounce;
+    searchInput.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(() => { CT.searchQuery = searchInput.value; CT.page = 1; renderCampaignTable(COMPUTED.campaigns); }, 250); });
+  }
+  const btnCSV = document.getElementById('btnExportCampaignCSV');
+  if (btnCSV) btnCSV.addEventListener('click', () => exportCampaignCSV());
+}
+
+function renderCampaignTable(campaigns) {
+  let rows = [...campaigns];
+  if (CT.searchQuery) {
+    const q = CT.searchQuery.toLowerCase();
+    rows = rows.filter(r => r.campaign_name.toLowerCase().includes(q) || r.source_medium.toLowerCase().includes(q));
+  }
+  rows.sort((a, b) => {
+    let va = a[CT.sortCol], vb = b[CT.sortCol];
+    if (typeof va === 'string') return CT.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return CT.sortDir === 'asc' ? va - vb : vb - va;
+  });
+  const totalRows = rows.length;
+  const totalPages = Math.ceil(totalRows / CT.perPage) || 1;
+  CT.page = Math.min(CT.page, totalPages);
+  const start = (CT.page - 1) * CT.perPage;
+  const pageRows = rows.slice(start, start + CT.perPage);
+
+  const tbody = document.getElementById('ctBody');
+  if (!tbody) return;
+  tbody.innerHTML = pageRows.map(r => `
+    <tr class="${r.purchase > 0 ? 'has-bookings' : ''}">
+      <td class="td-campaign" title="${escHtml(r.campaign_name)}">${escHtml(r.campaign_name)}</td>
+      <td title="${escHtml(r.source_medium)}">${escHtml(r.source_medium)}</td>
+      <td class="num">${formatNumber(r.session_start)}</td>
+      <td class="num">${formatNumber(r.search)}</td>
+      <td class="num">${formatNumber(r.purchase)}</td>
+      <td class="num">$${formatNumber(Math.round(r.purchase_revenue))}</td>
+      <td class="num">${r.cvr.toFixed(2)}%</td>
+      <td class="num">$${formatNumber(Math.round(r.asp))}</td>
+    </tr>`).join('');
+
+  const countEl = document.getElementById('ctRowCount');
+  if (countEl) countEl.textContent = totalRows.toLocaleString() + ' campañas';
+  const pageInfoEl = document.getElementById('ctPageInfo');
+  if (pageInfoEl) pageInfoEl.textContent = `${start + 1}–${Math.min(start + CT.perPage, totalRows)} de ${totalRows.toLocaleString()}`;
+  renderTablePagination('ctPagination', CT, totalPages, () => renderCampaignTable(COMPUTED.campaigns));
+}
+
+function exportCampaignCSV() {
+  const rows = COMPUTED.campaigns;
+  const headers = ['Campaign', 'Source/Medium', 'Sessions', 'Searches', 'Bookings', 'Revenue', 'CVR%', 'ASP'];
+  const csv = [headers.join(','), ...rows.map(r => [
+    '"' + (r.campaign_name || '').replace(/"/g, '""') + '"',
+    '"' + (r.source_medium || '').replace(/"/g, '""') + '"',
+    r.session_start, r.search, r.purchase, r.purchase_revenue.toFixed(2), r.cvr.toFixed(2), r.asp.toFixed(2),
+  ].join(','))].join('\n');
+  downloadCSV(csv, 'despegar_campaigns_' + new Date().toISOString().slice(0, 10) + '.csv');
+}
+
+// ========== DETAIL DATA TABLE ==========
+function bindDetailTable() {
+  document.querySelectorAll('[data-table="dt"].sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (DT.sortCol === col) DT.sortDir = DT.sortDir === 'asc' ? 'desc' : 'asc';
+      else { DT.sortCol = col; DT.sortDir = 'desc'; }
+      document.querySelectorAll('[data-table="dt"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
       th.classList.add(DT.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
       renderDataTable(COMPUTED.filtered);
     });
   });
-
-  // Search
   const searchInput = document.getElementById('dtSearch');
   if (searchInput) {
     let debounce;
-    searchInput.addEventListener('input', () => {
-      clearTimeout(debounce);
-      debounce = setTimeout(() => {
-        DT.searchQuery = searchInput.value;
-        DT.page = 1;
-        renderDataTable(COMPUTED.filtered);
-      }, 250);
-    });
+    searchInput.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(() => { DT.searchQuery = searchInput.value; DT.page = 1; renderDataTable(COMPUTED.filtered); }, 250); });
   }
-
-  // CSV Export
   const btnCSV = document.getElementById('btnExportCSV');
-  if (btnCSV) {
-    btnCSV.addEventListener('click', () => exportCSV());
-  }
+  if (btnCSV) btnCSV.addEventListener('click', () => exportDetailCSV());
 }
 
 function renderDataTable(filtered) {
-  let rows = filtered.map(r => ({
-    ...r,
-    cvr: r.session_start > 0 ? r.purchase / r.session_start * 100 : 0,
-  }));
-
-  // Search filter
+  let rows = filtered.map(r => ({ ...r, cvr: r.session_start > 0 ? r.purchase / r.session_start * 100 : 0 }));
   if (DT.searchQuery) {
     const q = DT.searchQuery.toLowerCase();
-    rows = rows.filter(r =>
-      r.channel_group.toLowerCase().includes(q) ||
-      r.device_category.toLowerCase().includes(q) ||
-      r.campaign_name.toLowerCase().includes(q) ||
-      r.source_medium.toLowerCase().includes(q) ||
-      r.date.includes(q)
-    );
+    rows = rows.filter(r => r.channel_group.toLowerCase().includes(q) || r.device_category.toLowerCase().includes(q) || r.campaign_name.toLowerCase().includes(q) || r.source_medium.toLowerCase().includes(q) || r.date.includes(q));
   }
-
-  // Sort
   rows.sort((a, b) => {
     let va = a[DT.sortCol], vb = b[DT.sortCol];
-    if (typeof va === 'string') {
-      return DT.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-    }
+    if (typeof va === 'string') return DT.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
     return DT.sortDir === 'asc' ? va - vb : vb - va;
   });
-
-  // Paginate
   const totalRows = rows.length;
   const totalPages = Math.ceil(totalRows / DT.perPage) || 1;
   DT.page = Math.min(DT.page, totalPages);
   const start = (DT.page - 1) * DT.perPage;
   const pageRows = rows.slice(start, start + DT.perPage);
 
-  // Render body
   const tbody = document.getElementById('dtBody');
   if (!tbody) return;
-
   tbody.innerHTML = pageRows.map(r => `
     <tr class="${r.purchase > 0 ? 'has-bookings' : ''}">
       <td>${r.date}</td>
@@ -802,97 +704,99 @@ function renderDataTable(filtered) {
       <td class="num">${formatNumber(r.purchase)}</td>
       <td class="num">$${formatNumber(Math.round(r.purchase_revenue))}</td>
       <td class="num">${r.cvr.toFixed(2)}%</td>
-    </tr>
-  `).join('');
+    </tr>`).join('');
 
-  // Row count
   const countEl = document.getElementById('dtRowCount');
   if (countEl) countEl.textContent = totalRows.toLocaleString() + ' registros';
-
-  // Page info
   const pageInfoEl = document.getElementById('dtPageInfo');
-  if (pageInfoEl) {
-    const end = Math.min(start + DT.perPage, totalRows);
-    pageInfoEl.textContent = `${start + 1}–${end} de ${totalRows.toLocaleString()}`;
-  }
-
-  // Pagination
-  renderPagination(totalPages);
+  if (pageInfoEl) pageInfoEl.textContent = `${start + 1}–${Math.min(start + DT.perPage, totalRows)} de ${totalRows.toLocaleString()}`;
+  renderTablePagination('dtPagination', DT, totalPages, () => renderDataTable(COMPUTED.filtered));
 }
 
-function renderPagination(totalPages) {
-  const container = document.getElementById('dtPagination');
+function exportDetailCSV() {
+  const rows = COMPUTED.filtered;
+  const headers = ['Date', 'Device', 'Channel', 'Campaign', 'Source/Medium', 'Sessions', 'Searches', 'Views', 'Checkout', 'Bookings', 'Revenue', 'CVR%'];
+  const csv = [headers.join(','), ...rows.map(r => [
+    r.date, r.device_category, r.channel_group,
+    '"' + (r.campaign_name || '').replace(/"/g, '""') + '"',
+    '"' + (r.source_medium || '').replace(/"/g, '""') + '"',
+    r.session_start, r.search, r.view_item, r.begin_checkout, r.purchase, r.purchase_revenue.toFixed(2),
+    (r.session_start > 0 ? r.purchase / r.session_start * 100 : 0).toFixed(2),
+  ].join(','))].join('\n');
+  downloadCSV(csv, 'despegar_detail_' + new Date().toISOString().slice(0, 10) + '.csv');
+}
+
+// ========== SHARED PAGINATION ==========
+function renderTablePagination(containerId, state, totalPages, renderFn) {
+  const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
-
   if (totalPages <= 1) return;
-
-  // Prev button
   const prevBtn = document.createElement('button');
-  prevBtn.textContent = '‹';
-  prevBtn.disabled = DT.page <= 1;
-  prevBtn.addEventListener('click', () => { DT.page--; renderDataTable(COMPUTED.filtered); });
+  prevBtn.textContent = '‹'; prevBtn.disabled = state.page <= 1;
+  prevBtn.addEventListener('click', () => { state.page--; renderFn(); });
   container.appendChild(prevBtn);
-
-  // Page buttons (max 7 visible)
   const maxVisible = 7;
-  let startPage = Math.max(1, DT.page - 3);
+  let startPage = Math.max(1, state.page - 3);
   let endPage = Math.min(totalPages, startPage + maxVisible - 1);
   if (endPage - startPage < maxVisible - 1) startPage = Math.max(1, endPage - maxVisible + 1);
-
   for (let p = startPage; p <= endPage; p++) {
     const btn = document.createElement('button');
-    btn.textContent = p;
-    btn.classList.toggle('active', p === DT.page);
-    btn.addEventListener('click', () => { DT.page = p; renderDataTable(COMPUTED.filtered); });
+    btn.textContent = p; btn.classList.toggle('active', p === state.page);
+    btn.addEventListener('click', () => { state.page = p; renderFn(); });
     container.appendChild(btn);
   }
-
-  // Next button
   const nextBtn = document.createElement('button');
-  nextBtn.textContent = '›';
-  nextBtn.disabled = DT.page >= totalPages;
-  nextBtn.addEventListener('click', () => { DT.page++; renderDataTable(COMPUTED.filtered); });
+  nextBtn.textContent = '›'; nextBtn.disabled = state.page >= totalPages;
+  nextBtn.addEventListener('click', () => { state.page++; renderFn(); });
   container.appendChild(nextBtn);
 }
 
-// ========== CSV EXPORT ==========
-function exportCSV() {
-  const filtered = COMPUTED.filtered;
-  const headers = ['Date', 'Device', 'Channel', 'Campaign', 'Source/Medium', 'Sessions', 'Searches', 'Views', 'Checkout', 'Bookings', 'Revenue', 'CVR%'];
-  const rows = filtered.map(r => [
-    r.date,
-    r.device_category,
-    r.channel_group,
-    '"' + (r.campaign_name || '').replace(/"/g, '""') + '"',
-    '"' + (r.source_medium || '').replace(/"/g, '""') + '"',
-    r.session_start,
-    r.search,
-    r.view_item,
-    r.begin_checkout,
-    r.purchase,
-    r.purchase_revenue.toFixed(2),
-    (r.session_start > 0 ? r.purchase / r.session_start * 100 : 0).toFixed(2),
-  ]);
-
-  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+function downloadCSV(csv, filename) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'despegar_dashboard_export_' + new Date().toISOString().slice(0, 10) + '.csv';
-  a.click();
+  a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
 
-// ========== PERIOD BADGE ==========
-function updatePeriodBadge(filtered) {
-  const badge = document.getElementById('periodBadgeText');
-  if (!badge || filtered.length === 0) return;
-  const dates = [...new Set(filtered.map(r => r.date))].sort();
-  const first = dates[0];
-  const last = dates[dates.length - 1];
-  badge.textContent = dates.length === 1 ? formatDateShort(first) : formatDateShort(first) + ' – ' + formatDateShort(last);
+// ========== JS TOOLTIP SYSTEM (fixes cutoff) ==========
+function initTooltipSystem() {
+  const tip = document.getElementById('sharedTooltip');
+  if (!tip) return;
+
+  document.querySelectorAll('.info-tip').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      const text = el.getAttribute('data-tooltip');
+      if (!text) return;
+      tip.textContent = text;
+      tip.classList.add('visible');
+
+      // Position relative to the triggering element
+      const rect = el.getBoundingClientRect();
+      const tipW = tip.offsetWidth;
+      const tipH = tip.offsetHeight;
+
+      let left = rect.left + rect.width / 2 - tipW / 2;
+      let top = rect.bottom + 10;
+
+      // Clamp horizontally
+      if (left < 8) left = 8;
+      if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+
+      // Flip above if overflows bottom
+      if (top + tipH > window.innerHeight - 8) {
+        top = rect.top - tipH - 10;
+      }
+
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    });
+
+    el.addEventListener('mouseleave', () => {
+      tip.classList.remove('visible');
+    });
+  });
 }
 
 // ========== SIDEBAR ==========
@@ -900,14 +804,8 @@ function bindSidebar() {
   const sidebar = document.getElementById('sidebar');
   const toggleBtn = document.getElementById('sidebarToggle');
   const mobileBtn = document.getElementById('mobileMenuBtn');
-
   let overlay = document.querySelector('.sidebar-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.className = 'sidebar-overlay';
-    document.body.appendChild(overlay);
-  }
-
+  if (!overlay) { overlay = document.createElement('div'); overlay.className = 'sidebar-overlay'; document.body.appendChild(overlay); }
   const close = () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); };
   if (toggleBtn) toggleBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
   if (mobileBtn) mobileBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
@@ -924,21 +822,12 @@ function formatK(n) {
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
   return Math.round(n).toString();
 }
-function escHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
-}
+function escHtml(s) { const div = document.createElement('div'); div.textContent = s; return div.innerHTML; }
 function roundedRect(ctx, x, y, w, h, r) {
   if (h <= 0) return;
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h);
-  ctx.lineTo(x, y + h);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
+  r = Math.min(r, w/2, h/2);
+  ctx.beginPath(); ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r); ctx.lineTo(x+w, y+h);
+  ctx.lineTo(x, y+h); ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
 }

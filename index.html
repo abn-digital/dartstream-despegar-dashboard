@@ -12,6 +12,9 @@
 </head>
 <body>
 
+  <!-- Shared Tooltip (JS-positioned, avoids cutoff) -->
+  <div id="sharedTooltip" class="shared-tooltip"></div>
+
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
@@ -37,6 +40,10 @@
       <button class="nav-item" data-tab="funnel">
         <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
         <span>Funnel &amp; Journey</span>
+      </button>
+      <button class="nav-item" data-tab="campaigns">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span>Campañas</span>
       </button>
       <button class="nav-item" data-tab="detail">
         <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -69,12 +76,6 @@
             <span>NARANJA X VIAJES</span>
           </div>
         </div>
-        <div class="topbar-right">
-          <div class="period-badge">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span id="periodBadgeText">—</span>
-          </div>
-        </div>
       </div>
 
       <div class="topbar-row-2">
@@ -86,7 +87,11 @@
           </button>
           <button class="tab-btn" data-tab="funnel">
             <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-            Funnel &amp; Journey
+            Funnel
+          </button>
+          <button class="tab-btn" data-tab="campaigns">
+            <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Campañas
           </button>
           <button class="tab-btn" data-tab="detail">
             <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -96,8 +101,12 @@
 
         <!-- Global Filters -->
         <div class="global-filters" id="globalFilters">
-          <select class="filter-pill" id="filterMonth"></select>
-          <select class="filter-pill" id="filterWeek"></select>
+          <div class="date-range" id="dateRangeFilter">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <input type="date" id="filterDateFrom" class="date-input">
+            <span class="date-sep">—</span>
+            <input type="date" id="filterDateTo" class="date-input">
+          </div>
           <select class="filter-pill" id="filterDevice">
             <option value="all">Device: Todos</option>
             <option value="desktop">Desktop</option>
@@ -114,26 +123,22 @@
 
       <!-- ===== TAB: OVERVIEW ===== -->
       <div class="tab-panel active" id="panelOverview">
-        <!-- BAN Grid — Big Ass Numbers -->
+        <!-- BAN Grid -->
         <div class="ban-grid" id="banGrid">
-          <!-- Gross Bookings -->
-          <div class="ban-card" id="banGB">
+          <div class="ban-card">
             <div class="ban-header">
               <div class="ban-icon ban-icon-gb">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               </div>
               <span class="ban-label">Gross Bookings</span>
-              <span class="info-tip" data-tooltip="Suma de purchase_revenue. Revenue total generado por reservas en el período.">
+              <span class="info-tip" data-tooltip="Suma de purchase_revenue. Revenue total generado por reservas en el período seleccionado.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
             <div class="ban-value" id="banGBValue">—</div>
-            <div class="ban-footer">
-              <span class="ban-sub">Revenue total</span>
-            </div>
+            <div class="ban-footer"><span class="ban-sub">Revenue total</span></div>
           </div>
-          <!-- Margin -->
-          <div class="ban-card" id="banMargin">
+          <div class="ban-card">
             <div class="ban-header">
               <div class="ban-icon ban-icon-margin">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
@@ -144,12 +149,9 @@
               </span>
             </div>
             <div class="ban-value" id="banMarginValue">—</div>
-            <div class="ban-footer">
-              <span class="ban-sub">Rentabilidad</span>
-            </div>
+            <div class="ban-footer"><span class="ban-sub">Rentabilidad</span></div>
           </div>
-          <!-- Orders -->
-          <div class="ban-card" id="banOrders">
+          <div class="ban-card">
             <div class="ban-header">
               <div class="ban-icon ban-icon-orders">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
@@ -160,12 +162,9 @@
               </span>
             </div>
             <div class="ban-value" id="banOrdersValue">—</div>
-            <div class="ban-footer">
-              <span class="ban-sub">Reservas completadas</span>
-            </div>
+            <div class="ban-footer"><span class="ban-sub">Reservas completadas</span></div>
           </div>
-          <!-- ASP -->
-          <div class="ban-card" id="banASP">
+          <div class="ban-card">
             <div class="ban-header">
               <div class="ban-icon ban-icon-asp">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8"/><line x1="12" y1="6" x2="12" y2="18"/></svg>
@@ -176,9 +175,7 @@
               </span>
             </div>
             <div class="ban-value" id="banASPValue">—</div>
-            <div class="ban-footer">
-              <span class="ban-sub">Ticket promedio</span>
-            </div>
+            <div class="ban-footer"><span class="ban-sub">Ticket promedio</span></div>
           </div>
         </div>
 
@@ -187,7 +184,7 @@
           <section class="card" id="sectionPlatform">
             <div class="card-header">
               <h2 class="card-title">Distribución por Plataforma</h2>
-              <span class="info-tip" data-tooltip="Distribución de bookings por tipo de dispositivo.">
+              <span class="info-tip" data-tooltip="Distribución de bookings por tipo de dispositivo (Desktop, Mobile, Tablet).">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
@@ -212,7 +209,7 @@
             </div>
             <div class="cvr-summary">
               <div class="cvr-hero">
-                <div class="cvr-hero-label">CVR ACTUAL</div>
+                <div class="cvr-hero-label">CVR PERÍODO</div>
                 <div class="cvr-hero-value" id="cvrHeroValue">—</div>
               </div>
               <div class="cvr-meta">
@@ -225,12 +222,16 @@
                   <span class="cvr-meta-value" id="cvrBookings">—</span>
                 </div>
                 <div class="cvr-meta-row">
-                  <span class="cvr-meta-label">CVR Primera Fecha</span>
-                  <span class="cvr-meta-value" id="cvrFirstDate">—</span>
+                  <span class="cvr-meta-label" id="cvrStartLabel">CVR Inicio</span>
+                  <span class="cvr-meta-value" id="cvrStartValue">—</span>
                 </div>
                 <div class="cvr-meta-row">
-                  <span class="cvr-meta-label">vs Primera Fecha</span>
-                  <span class="cvr-meta-value" id="cvrVsFirst">—</span>
+                  <span class="cvr-meta-label" id="cvrEndLabel">CVR Fin</span>
+                  <span class="cvr-meta-value" id="cvrEndValue">—</span>
+                </div>
+                <div class="cvr-meta-row">
+                  <span class="cvr-meta-label">Δ Período</span>
+                  <span class="cvr-meta-value" id="cvrDelta">—</span>
                 </div>
               </div>
             </div>
@@ -241,46 +242,91 @@
       <!-- ===== TAB: FUNNEL & JOURNEY ===== -->
       <div class="tab-panel" id="panelFunnel">
         <div class="funnel-journey-grid">
-          <!-- Funnel -->
           <section class="card">
             <div class="card-header">
               <h2 class="card-title">Funnel de Conversión</h2>
-              <span class="info-tip" data-tooltip="Embudo: Sessions → Searches → Detail → Checkout → Bookings. Drop rate = pérdida entre pasos.">
+              <span class="info-tip" data-tooltip="Embudo: Sessions → Searches → Detail → Checkout → Bookings. Drop rate = pérdida porcentual entre pasos.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
             <div class="cvr-strip" id="cvrStrip">
-              <div class="cvr-chip">
-                <div class="cvr-chip-label">CVR LW</div>
-                <div class="cvr-chip-value" id="cvrLW">—</div>
-              </div>
+              <div class="cvr-chip"><div class="cvr-chip-label">CVR INICIO</div><div class="cvr-chip-value" id="cvrLW">—</div></div>
               <div class="cvr-divider"></div>
-              <div class="cvr-chip">
-                <div class="cvr-chip-label">CVR Actual</div>
-                <div class="cvr-chip-value cvr-chip-main" id="cvrActual">—</div>
-              </div>
+              <div class="cvr-chip"><div class="cvr-chip-label">CVR PERÍODO</div><div class="cvr-chip-value cvr-chip-main" id="cvrActual">—</div></div>
               <div class="cvr-divider"></div>
-              <div class="cvr-chip">
-                <div class="cvr-chip-label">vs LW</div>
-                <div class="cvr-chip-value" id="cvrVsLW">—</div>
-              </div>
+              <div class="cvr-chip"><div class="cvr-chip-label">Δ PERÍODO</div><div class="cvr-chip-value" id="cvrVsLW">—</div></div>
             </div>
             <div class="funnel-chart" id="funnelChart"></div>
           </section>
 
-          <!-- Evolution Chart -->
           <section class="card section-full-width">
             <div class="card-header">
               <h2 class="card-title">Evolución Diaria — Búsquedas vs CVR</h2>
-              <span class="info-tip" data-tooltip="Barras: volumen de búsquedas. Línea: CVR% (bookings/sessions). Identifica picos y valles.">
+              <span class="info-tip" data-tooltip="Barras: volumen de búsquedas (search). Línea: CVR% (bookings/sessions). Hover para ver valores exactos.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
-            <div class="chart-container">
+            <div class="chart-container" id="evolutionContainer">
               <canvas id="evolutionChart"></canvas>
+              <div class="chart-tooltip" id="chartTooltip"></div>
             </div>
           </section>
         </div>
+      </div>
+
+      <!-- ===== TAB: CAMPAÑAS ===== -->
+      <div class="tab-panel" id="panelCampaigns">
+        <!-- Top Campaigns Bar Chart -->
+        <section class="card" id="sectionCampaignChart">
+          <div class="card-header">
+            <h2 class="card-title">Top Campañas por Revenue</h2>
+            <span class="info-tip" data-tooltip="Las 10 campañas con mayor revenue en el período seleccionado. Incluye bookings asociados.">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </span>
+          </div>
+          <div class="campaign-bars" id="campaignBars"></div>
+        </section>
+
+        <!-- Campaign Table -->
+        <section class="card" id="sectionCampaignTable">
+          <div class="dt-header">
+            <div class="dt-header-left">
+              <h2 class="card-title">Performance por Campaña</h2>
+              <span class="dt-row-count" id="ctRowCount">0 campañas</span>
+            </div>
+            <div class="dt-header-right">
+              <div class="dt-search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="ctSearch" placeholder="Buscar campaña, source...">
+              </div>
+              <button class="btn-export" id="btnExportCampaignCSV">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Exportar CSV
+              </button>
+            </div>
+          </div>
+          <div class="dt-table-wrap">
+            <table class="data-table" id="campaignTable">
+              <thead>
+                <tr>
+                  <th data-sort="campaign_name" data-table="ct" class="sortable">Campaña<span class="sort-arrow"></span></th>
+                  <th data-sort="source_medium" data-table="ct" class="sortable">Source / Medium<span class="sort-arrow"></span></th>
+                  <th data-sort="session_start" data-table="ct" class="sortable num">Sessions<span class="sort-arrow"></span></th>
+                  <th data-sort="search" data-table="ct" class="sortable num">Searches<span class="sort-arrow"></span></th>
+                  <th data-sort="purchase" data-table="ct" class="sortable num sorted-desc">Bookings<span class="sort-arrow"></span></th>
+                  <th data-sort="purchase_revenue" data-table="ct" class="sortable num">Revenue<span class="sort-arrow"></span></th>
+                  <th data-sort="cvr" data-table="ct" class="sortable num">CVR%<span class="sort-arrow"></span></th>
+                  <th data-sort="asp" data-table="ct" class="sortable num">ASP<span class="sort-arrow"></span></th>
+                </tr>
+              </thead>
+              <tbody id="ctBody"></tbody>
+            </table>
+          </div>
+          <div class="dt-footer">
+            <div class="dt-page-info" id="ctPageInfo">—</div>
+            <div class="dt-pagination" id="ctPagination"></div>
+          </div>
+        </section>
       </div>
 
       <!-- ===== TAB: DETAIL ===== -->
@@ -302,30 +348,28 @@
               </button>
             </div>
           </div>
-
-          <div class="dt-table-wrap" id="dtTableWrap">
+          <div class="dt-table-wrap">
             <table class="data-table" id="dataTable">
               <thead>
                 <tr>
-                  <th data-sort="date" class="sortable sorted-desc">Fecha<span class="sort-arrow"></span></th>
-                  <th data-sort="device_category" class="sortable">Device<span class="sort-arrow"></span></th>
-                  <th data-sort="channel_group" class="sortable">Canal<span class="sort-arrow"></span></th>
-                  <th data-sort="campaign_name" class="sortable">Campaña<span class="sort-arrow"></span></th>
-                  <th data-sort="source_medium" class="sortable">Source / Medium<span class="sort-arrow"></span></th>
-                  <th data-sort="session_start" class="sortable num">Sessions<span class="sort-arrow"></span></th>
-                  <th data-sort="search" class="sortable num">Searches<span class="sort-arrow"></span></th>
-                  <th data-sort="view_item" class="sortable num">Views<span class="sort-arrow"></span></th>
-                  <th data-sort="begin_checkout" class="sortable num">Checkout<span class="sort-arrow"></span></th>
-                  <th data-sort="purchase" class="sortable num">Bookings<span class="sort-arrow"></span></th>
-                  <th data-sort="purchase_revenue" class="sortable num">Revenue<span class="sort-arrow"></span></th>
-                  <th data-sort="cvr" class="sortable num">CVR%<span class="sort-arrow"></span></th>
+                  <th data-sort="date" data-table="dt" class="sortable sorted-desc">Fecha<span class="sort-arrow"></span></th>
+                  <th data-sort="device_category" data-table="dt" class="sortable">Device<span class="sort-arrow"></span></th>
+                  <th data-sort="channel_group" data-table="dt" class="sortable">Canal<span class="sort-arrow"></span></th>
+                  <th data-sort="campaign_name" data-table="dt" class="sortable">Campaña<span class="sort-arrow"></span></th>
+                  <th data-sort="source_medium" data-table="dt" class="sortable">Source / Medium<span class="sort-arrow"></span></th>
+                  <th data-sort="session_start" data-table="dt" class="sortable num">Sessions<span class="sort-arrow"></span></th>
+                  <th data-sort="search" data-table="dt" class="sortable num">Searches<span class="sort-arrow"></span></th>
+                  <th data-sort="view_item" data-table="dt" class="sortable num">Views<span class="sort-arrow"></span></th>
+                  <th data-sort="begin_checkout" data-table="dt" class="sortable num">Checkout<span class="sort-arrow"></span></th>
+                  <th data-sort="purchase" data-table="dt" class="sortable num">Bookings<span class="sort-arrow"></span></th>
+                  <th data-sort="purchase_revenue" data-table="dt" class="sortable num">Revenue<span class="sort-arrow"></span></th>
+                  <th data-sort="cvr" data-table="dt" class="sortable num">CVR%<span class="sort-arrow"></span></th>
                 </tr>
               </thead>
               <tbody id="dtBody"></tbody>
             </table>
           </div>
-
-          <div class="dt-footer" id="dtFooter">
+          <div class="dt-footer">
             <div class="dt-page-info" id="dtPageInfo">—</div>
             <div class="dt-pagination" id="dtPagination"></div>
           </div>
