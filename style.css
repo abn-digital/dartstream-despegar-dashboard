@@ -257,6 +257,8 @@ h1, h2, h3, .font-display { font-family: 'Poppins', system-ui, sans-serif; }
 .ct-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 
 /* ========== CAMPAIGN BARS (Tab Campañas) ========== */
+@keyframes fadeInLeft { to { opacity: 1; transform: translateX(0); } }
+
 .campaign-bars { display: flex; flex-direction: column; gap: 8px; }
 .campaign-bar-row {
   display: grid; grid-template-columns: 200px 1fr 100px 80px; gap: 12px; align-items: center;
