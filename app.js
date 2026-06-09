@@ -93,13 +93,11 @@ function formatDateCompact(dateStr) {
 // ========== TAB SYSTEM ==========
 function bindTabs() {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
-  document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 }
 
 function switchTab(tabId) {
   currentTab = tabId;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   const panelId = 'panel' + tabId.charAt(0).toUpperCase() + tabId.slice(1);
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === panelId));
   renderActiveTab();
@@ -225,6 +223,52 @@ function renderBANs(totals) {
       requestAnimationFrame(() => { el.style.transition = 'opacity 0.3s ease'; el.style.opacity = '1'; });
     }
   });
+  renderSparklines(COMPUTED.daily);
+}
+
+// ========== SPARKLINES ==========
+function renderSparklines(daily) {
+  if (daily.length < 2) return;
+
+  const sparkConfigs = [
+    { id: 'sparkGB', key: 'purchase_revenue', color: '#540CEC' },
+    { id: 'sparkMargin', key: 'purchase_revenue', color: '#12B886', multiplier: 0.0224 },
+    { id: 'sparkOrders', key: 'purchase', color: '#9D17C9' },
+    { id: 'sparkASP', key: null, color: '#E5337A' }, // computed: revenue / orders
+  ];
+
+  sparkConfigs.forEach(cfg => {
+    const svg = document.getElementById(cfg.id);
+    if (!svg) return;
+
+    const values = daily.map(d => {
+      if (cfg.key === null) return d.purchase > 0 ? d.purchase_revenue / d.purchase : 0;
+      return (d[cfg.key] || 0) * (cfg.multiplier || 1);
+    });
+
+    const W = 120, H = 28, pad = 1;
+    const max = Math.max(...values) || 1;
+    const min = Math.min(...values);
+    const range = max - min || 1;
+
+    const points = values.map((v, i) => {
+      const x = pad + (i / (values.length - 1)) * (W - 2 * pad);
+      const y = pad + (1 - (v - min) / range) * (H - 2 * pad);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+
+    const gradId = cfg.id + 'Grad';
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${cfg.color}" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="${cfg.color}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points="${points[0].split(',')[0]},${H} ${points.join(' ')} ${points[points.length-1].split(',')[0]},${H}" fill="url(#${gradId})" />
+      <polyline points="${points.join(' ')}" fill="none" stroke="${cfg.color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    `;
+  });
 }
 
 // ========== RENDER CVR SUMMARY ==========
@@ -237,31 +281,6 @@ function renderCVRSummary(totals, daily) {
 
   const bookingsEl = document.getElementById('cvrBookings');
   if (bookingsEl) bookingsEl.textContent = formatNumber(totals.purchase);
-
-  if (daily.length > 0) {
-    const firstDay = daily[0];
-    const lastDay = daily[daily.length - 1];
-    const firstCvr = firstDay.session_start > 0 ? firstDay.purchase / firstDay.session_start * 100 : 0;
-    const lastCvr = lastDay.session_start > 0 ? lastDay.purchase / lastDay.session_start * 100 : 0;
-
-    const startLabel = document.getElementById('cvrStartLabel');
-    if (startLabel) startLabel.textContent = 'CVR ' + formatDateShort(firstDay.date);
-    const startValue = document.getElementById('cvrStartValue');
-    if (startValue) startValue.textContent = firstCvr.toFixed(2) + '%';
-
-    const endLabel = document.getElementById('cvrEndLabel');
-    if (endLabel) endLabel.textContent = 'CVR ' + formatDateShort(lastDay.date);
-    const endValue = document.getElementById('cvrEndValue');
-    if (endValue) endValue.textContent = lastCvr.toFixed(2) + '%';
-
-    const deltaEl = document.getElementById('cvrDelta');
-    if (deltaEl) {
-      const delta = firstCvr > 0 ? ((totals.cvr - firstCvr) / firstCvr * 100).toFixed(1) : '0.0';
-      const sign = parseFloat(delta) >= 0 ? '+' : '';
-      deltaEl.textContent = sign + delta + '%';
-      deltaEl.className = 'cvr-meta-value ' + (parseFloat(delta) < 0 ? 'negative' : 'positive');
-    }
-  }
 }
 
 // ========== RENDER FUNNEL ==========
@@ -302,21 +321,8 @@ function renderFunnel(totals, daily) {
   });
 
   // CVR Strip
-  if (daily.length > 0) {
-    const firstCvr = daily[0].session_start > 0 ? daily[0].purchase / daily[0].session_start * 100 : 0;
-    const overallCvr = totals.cvr;
-    const vsLw = firstCvr > 0 ? ((overallCvr - firstCvr) / firstCvr * 100).toFixed(1) : '0.0';
-
-    const cvrLW = document.getElementById('cvrLW');
-    const cvrActual = document.getElementById('cvrActual');
-    const cvrVsLW = document.getElementById('cvrVsLW');
-    if (cvrLW) cvrLW.textContent = firstCvr.toFixed(2) + '%';
-    if (cvrActual) cvrActual.textContent = overallCvr.toFixed(2) + '%';
-    if (cvrVsLW) {
-      cvrVsLW.textContent = (parseFloat(vsLw) >= 0 ? '+' : '') + vsLw + '%';
-      cvrVsLW.className = 'cvr-chip-value ' + (parseFloat(vsLw) < 0 ? 'negative' : 'positive');
-    }
-  }
+  const cvrActual = document.getElementById('cvrActual');
+  if (cvrActual) cvrActual.textContent = totals.cvr.toFixed(2) + '%';
 }
 
 // ========== PLATFORM LEGEND ==========
@@ -692,11 +698,11 @@ function renderDataTable(filtered) {
   if (!tbody) return;
   tbody.innerHTML = pageRows.map(r => `
     <tr class="${r.purchase > 0 ? 'has-bookings' : ''}">
-      <td>${r.date}</td>
+      <td class="td-date">${formatDateShort(r.date)}</td>
       <td>${capitalize(r.device_category)}</td>
       <td>${escHtml(r.channel_group)}</td>
       <td class="td-campaign" title="${escHtml(r.campaign_name)}">${escHtml(r.campaign_name)}</td>
-      <td title="${escHtml(r.source_medium)}">${escHtml(r.source_medium)}</td>
+      <td class="td-campaign" title="${escHtml(r.source_medium)}">${escHtml(r.source_medium)}</td>
       <td class="num">${formatNumber(r.session_start)}</td>
       <td class="num">${formatNumber(r.search)}</td>
       <td class="num">${formatNumber(r.view_item)}</td>

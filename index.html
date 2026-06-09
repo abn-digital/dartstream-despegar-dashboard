@@ -32,24 +32,7 @@
       </button>
     </div>
 
-    <nav class="sidebar-nav" id="sidebarNav">
-      <button class="nav-item active" data-tab="overview">
-        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span>Overview</span>
-      </button>
-      <button class="nav-item" data-tab="funnel">
-        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-        <span>Funnel &amp; Journey</span>
-      </button>
-      <button class="nav-item" data-tab="campaigns">
-        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        <span>Campañas</span>
-      </button>
-      <button class="nav-item" data-tab="detail">
-        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        <span>Detalle Táctico</span>
-      </button>
-    </nav>
+    
 
     <div class="sidebar-footer">
       <div class="sidebar-footer-badge">
@@ -131,12 +114,13 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               </div>
               <span class="ban-label">Gross Bookings</span>
-              <span class="info-tip" data-tooltip="Suma de purchase_revenue. Revenue total generado por reservas en el período seleccionado.">
+              <span class="info-tip" data-tooltip="Suma de purchase_revenue (USD). Revenue total generado por reservas en el período seleccionado. Fuente: BigQuery Despegar.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
             <div class="ban-value" id="banGBValue">—</div>
-            <div class="ban-footer"><span class="ban-sub">Revenue total</span></div>
+            <div class="ban-sparkline"><svg id="sparkGB" class="sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none"></svg></div>
+            <div class="ban-footer"><span class="ban-sub">Revenue total</span><span class="ban-currency">USD</span></div>
           </div>
           <div class="ban-card">
             <div class="ban-header">
@@ -149,6 +133,7 @@
               </span>
             </div>
             <div class="ban-value" id="banMarginValue">—</div>
+            <div class="ban-sparkline"><svg id="sparkMargin" class="sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none"></svg></div>
             <div class="ban-footer"><span class="ban-sub">Rentabilidad</span></div>
           </div>
           <div class="ban-card">
@@ -162,6 +147,7 @@
               </span>
             </div>
             <div class="ban-value" id="banOrdersValue">—</div>
+            <div class="ban-sparkline"><svg id="sparkOrders" class="sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none"></svg></div>
             <div class="ban-footer"><span class="ban-sub">Reservas completadas</span></div>
           </div>
           <div class="ban-card">
@@ -175,6 +161,7 @@
               </span>
             </div>
             <div class="ban-value" id="banASPValue">—</div>
+            <div class="ban-sparkline"><svg id="sparkASP" class="sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none"></svg></div>
             <div class="ban-footer"><span class="ban-sub">Ticket promedio</span></div>
           </div>
         </div>
@@ -221,18 +208,7 @@
                   <span class="cvr-meta-label">Bookings</span>
                   <span class="cvr-meta-value" id="cvrBookings">—</span>
                 </div>
-                <div class="cvr-meta-row">
-                  <span class="cvr-meta-label" id="cvrStartLabel">CVR Inicio</span>
-                  <span class="cvr-meta-value" id="cvrStartValue">—</span>
-                </div>
-                <div class="cvr-meta-row">
-                  <span class="cvr-meta-label" id="cvrEndLabel">CVR Fin</span>
-                  <span class="cvr-meta-value" id="cvrEndValue">—</span>
-                </div>
-                <div class="cvr-meta-row">
-                  <span class="cvr-meta-label">Δ Período</span>
-                  <span class="cvr-meta-value" id="cvrDelta">—</span>
-                </div>
+
               </div>
             </div>
           </section>
@@ -250,11 +226,7 @@
               </span>
             </div>
             <div class="cvr-strip" id="cvrStrip">
-              <div class="cvr-chip"><div class="cvr-chip-label">CVR INICIO</div><div class="cvr-chip-value" id="cvrLW">—</div></div>
-              <div class="cvr-divider"></div>
               <div class="cvr-chip"><div class="cvr-chip-label">CVR PERÍODO</div><div class="cvr-chip-value cvr-chip-main" id="cvrActual">—</div></div>
-              <div class="cvr-divider"></div>
-              <div class="cvr-chip"><div class="cvr-chip-label">Δ PERÍODO</div><div class="cvr-chip-value" id="cvrVsLW">—</div></div>
             </div>
             <div class="funnel-chart" id="funnelChart"></div>
           </section>
