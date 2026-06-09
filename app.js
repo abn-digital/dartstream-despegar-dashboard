@@ -105,24 +105,113 @@ function switchTab(tabId) {
 
 // ========== FILTER BINDING ==========
 function bindFilters() {
-  // Date range
+  const allDates = [...new Set(RAW_DATA.map(r => r.date))].sort();
+  const minDate = allDates[0], maxDate = allDates[allDates.length - 1];
+
+  // --- Date Range ---
+  const dateBtn = document.getElementById('dateRangeBtn');
+  const dateDropdown = document.getElementById('dateDropdown');
   const fromInput = document.getElementById('filterDateFrom');
   const toInput = document.getElementById('filterDateTo');
-  if (fromInput) fromInput.addEventListener('change', () => { FILTERS.dateFrom = fromInput.value; onFilterChange(); });
-  if (toInput) toInput.addEventListener('change', () => { FILTERS.dateTo = toInput.value; onFilterChange(); });
+  const dateLabel = document.getElementById('dateRangeLabel');
+  const applyBtn = document.getElementById('dateApplyBtn');
 
-  // Device
-  const deviceSelect = document.getElementById('filterDevice');
-  if (deviceSelect) deviceSelect.addEventListener('change', () => { FILTERS.device = deviceSelect.value; onFilterChange(); });
+  if (fromInput) { fromInput.value = FILTERS.dateFrom; fromInput.min = minDate; fromInput.max = maxDate; }
+  if (toInput) { toInput.value = FILTERS.dateTo; toInput.min = minDate; toInput.max = maxDate; }
+  updateDateLabel();
 
-  // Channel (dynamic)
-  const channelSelect = document.getElementById('filterChannel');
-  if (channelSelect) {
-    const channels = [...new Set(RAW_DATA.map(r => r.channel_group))].sort();
-    channelSelect.innerHTML = '<option value="all">Canal: Todos</option>';
-    channels.forEach(ch => { const opt = document.createElement('option'); opt.value = ch.toLowerCase(); opt.textContent = ch; channelSelect.appendChild(opt); });
-    channelSelect.addEventListener('change', () => { FILTERS.channel = channelSelect.value; onFilterChange(); });
+  dateBtn.addEventListener('click', () => toggleDropdown(dateBtn, dateDropdown));
+
+  // Presets
+  document.querySelectorAll('.date-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const days = parseInt(btn.dataset.days);
+      document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (days === 0) {
+        fromInput.value = minDate; toInput.value = maxDate;
+      } else {
+        const end = new Date(maxDate);
+        const start = new Date(end); start.setDate(start.getDate() - days + 1);
+        fromInput.value = start.toISOString().slice(0, 10); toInput.value = maxDate;
+      }
+    });
+  });
+
+  applyBtn.addEventListener('click', () => {
+    FILTERS.dateFrom = fromInput.value;
+    FILTERS.dateTo = toInput.value;
+    updateDateLabel();
+    closeAllDropdowns();
+    onFilterChange();
+  });
+
+  function updateDateLabel() {
+    dateLabel.textContent = formatDateCompact2(FILTERS.dateFrom) + ' — ' + formatDateCompact2(FILTERS.dateTo);
   }
+
+  // --- Device ---
+  const deviceBtn = document.getElementById('deviceFilterBtn');
+  const deviceDropdown = document.getElementById('deviceDropdown');
+  const deviceLabel = document.getElementById('deviceLabel');
+
+  deviceBtn.addEventListener('click', () => toggleDropdown(deviceBtn, deviceDropdown));
+  deviceDropdown.querySelectorAll('.dropdown-item').forEach(item => {
+    item.addEventListener('click', () => {
+      FILTERS.device = item.dataset.value;
+      deviceDropdown.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      deviceLabel.textContent = item.dataset.value === 'all' ? 'Device: Todos' : capitalize(item.dataset.value);
+      closeAllDropdowns();
+      onFilterChange();
+    });
+  });
+
+  // --- Channel ---
+  const channelBtn = document.getElementById('channelFilterBtn');
+  const channelDropdown = document.getElementById('channelDropdown');
+  const channelLabel = document.getElementById('channelLabel');
+
+  const channels = [...new Set(RAW_DATA.map(r => r.channel_group))].sort();
+  channelDropdown.innerHTML = '<button class="dropdown-item active" data-value="all">Todos</button>';
+  channels.forEach(ch => {
+    channelDropdown.innerHTML += `<button class="dropdown-item" data-value="${ch.toLowerCase()}">${ch}</button>`;
+  });
+
+  channelBtn.addEventListener('click', () => toggleDropdown(channelBtn, channelDropdown));
+  channelDropdown.querySelectorAll('.dropdown-item').forEach(item => {
+    item.addEventListener('click', () => {
+      FILTERS.channel = item.dataset.value;
+      channelDropdown.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      channelLabel.textContent = item.dataset.value === 'all' ? 'Canal: Todos' : item.textContent;
+      closeAllDropdowns();
+      onFilterChange();
+    });
+  });
+
+  // --- Global close ---
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.filter-group')) closeAllDropdowns();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllDropdowns(); });
+}
+
+function toggleDropdown(btn, dropdown) {
+  const isOpen = dropdown.classList.contains('open');
+  closeAllDropdowns();
+  if (!isOpen) { btn.classList.add('open'); dropdown.classList.add('open'); }
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.remove('open'));
+}
+
+function formatDateCompact2(dateStr) {
+  if (!dateStr) return '—';
+  const [y, m, d] = dateStr.split('-');
+  return parseInt(d) + ' ' + MONTH_NAMES[parseInt(m)];
 }
 
 // ========== FILTER DATA ==========

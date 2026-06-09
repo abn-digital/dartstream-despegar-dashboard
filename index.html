@@ -77,19 +77,60 @@
 
         <!-- Global Filters -->
         <div class="global-filters" id="globalFilters">
-          <div class="date-range" id="dateRangeFilter">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <input type="date" id="filterDateFrom" class="date-input">
-            <span class="date-sep">—</span>
-            <input type="date" id="filterDateTo" class="date-input">
+          <!-- Date Range Picker -->
+          <div class="filter-group">
+            <button class="filter-btn" id="dateRangeBtn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span id="dateRangeLabel">Cargando...</span>
+              <svg class="filter-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="filter-dropdown date-dropdown" id="dateDropdown">
+              <div class="date-presets">
+                <button class="date-preset" data-days="7">Últimos 7 días</button>
+                <button class="date-preset" data-days="14">Últimos 14 días</button>
+                <button class="date-preset" data-days="30">Últimos 30 días</button>
+                <button class="date-preset" data-days="0">Todo el período</button>
+              </div>
+              <div class="date-custom">
+                <div class="date-field">
+                  <label class="date-field-label">Desde</label>
+                  <input type="date" id="filterDateFrom" class="date-field-input">
+                </div>
+                <div class="date-field">
+                  <label class="date-field-label">Hasta</label>
+                  <input type="date" id="filterDateTo" class="date-field-input">
+                </div>
+              </div>
+              <div class="date-actions">
+                <button class="date-apply" id="dateApplyBtn">Aplicar</button>
+              </div>
+            </div>
           </div>
-          <select class="filter-pill" id="filterDevice">
-            <option value="all">Device: Todos</option>
-            <option value="desktop">Desktop</option>
-            <option value="mobile">Mobile</option>
-            <option value="tablet">Tablet</option>
-          </select>
-          <select class="filter-pill" id="filterChannel"></select>
+
+          <!-- Device Filter -->
+          <div class="filter-group">
+            <button class="filter-btn" id="deviceFilterBtn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <span id="deviceLabel">Device: Todos</span>
+              <svg class="filter-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="filter-dropdown list-dropdown" id="deviceDropdown">
+              <button class="dropdown-item active" data-value="all">Todos</button>
+              <button class="dropdown-item" data-value="desktop">Desktop</button>
+              <button class="dropdown-item" data-value="mobile">Mobile</button>
+              <button class="dropdown-item" data-value="tablet">Tablet</button>
+            </div>
+          </div>
+
+          <!-- Channel Filter -->
+          <div class="filter-group">
+            <button class="filter-btn" id="channelFilterBtn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              <span id="channelLabel">Canal: Todos</span>
+              <svg class="filter-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="filter-dropdown list-dropdown" id="channelDropdown"></div>
+          </div>
         </div>
       </div>
     </header>
