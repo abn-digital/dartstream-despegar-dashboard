@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
   bindFilters();
   bindTabs();
-  bindSidebar();
+
   bindDetailTable();
   bindCampaignTable();
   initTooltipSystem();
@@ -286,39 +286,75 @@ function renderCVRSummary(totals, daily) {
 // ========== RENDER FUNNEL ==========
 function renderFunnel(totals, daily) {
   const steps = [
-    { name: 'Usuarios (Sessions)', count: totals.session_start },
+    { name: 'Sessions', count: totals.session_start },
     { name: 'Searchers', count: totals.search },
-    { name: 'Detail (View Item)', count: totals.view_item },
+    { name: 'Detail', count: totals.view_item },
     { name: 'Checkout', count: totals.begin_checkout },
-    { name: 'Bookings (Purchase)', count: totals.purchase },
+    { name: 'Bookings', count: totals.purchase },
   ];
-  const colors = ['#540CEC', '#7A0FD6', '#9D17C9', '#C42B6B', '#E5337A'];
+  const colors = ['#540CEC', '#6B0ED4', '#9D17C9', '#C42B6B', '#E5337A'];
   const total = steps[0].count || 1;
   const funnelChart = document.getElementById('funnelChart');
   if (!funnelChart) return;
   funnelChart.innerHTML = '';
 
-  steps.forEach((step, i) => {
-    const pct = step.count / total * 100;
-    const visualWidth = pct < 3 ? Math.max(pct * 6, 3) : pct;
-    const stepEl = document.createElement('div');
-    stepEl.className = 'funnel-step funnel-step-animated';
-    stepEl.style.animationDelay = (i * 0.08) + 's';
-    stepEl.innerHTML = `
-      <div class="funnel-step-label"><span class="funnel-step-name">${step.name}</span><span class="funnel-step-count">${formatNumber(step.count)}</span></div>
-      <div class="funnel-bar-track"><div class="funnel-bar ${i === steps.length - 1 ? 'funnel-bar-final' : ''}" style="width:${visualWidth}%;--color:${colors[i]};"></div></div>
-      <span class="funnel-pct">${pct.toFixed(1)}%</span>`;
-    funnelChart.appendChild(stepEl);
+  const W = 500, stepH = 56, gap = 4;
+  const totalH = steps.length * stepH + (steps.length - 1) * gap;
+  const minW = 80;
 
+  // Build SVG funnel
+  let svgContent = '';
+  steps.forEach((step, i) => {
+    const pct = step.count / total;
+    const nextPct = i < steps.length - 1 ? (steps[i+1].count / total) : pct;
+    const topW = Math.max(pct * W, minW);
+    const botW = Math.max(nextPct * W, minW);
+    const y = i * (stepH + gap);
+    const topL = (W - topW) / 2;
+    const topR = (W + topW) / 2;
+    const botL = (W - botW) / 2;
+    const botR = (W + botW) / 2;
+
+    svgContent += `
+      <polygon points="${topL},${y} ${topR},${y} ${botR},${y + stepH} ${botL},${y + stepH}"
+        fill="${colors[i]}" opacity="0.92" class="funnel-trap" style="animation-delay:${i * 0.1}s"/>
+      <polygon points="${topL},${y} ${topR},${y} ${botR},${y + stepH} ${botL},${y + stepH}"
+        fill="url(#funnelShine)" />
+    `;
+
+    // Drop indicator between steps
     if (i < steps.length - 1) {
-      const nextCount = steps[i + 1].count;
-      const drop = step.count > 0 ? ((step.count - nextCount) / step.count * 100).toFixed(1) : '0.0';
-      const dropEl = document.createElement('div');
-      dropEl.className = 'funnel-drop-indicator';
-      dropEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg><span class="funnel-drop-text">-${drop}% drop</span>`;
-      funnelChart.appendChild(dropEl);
+      const drop = step.count > 0 ? ((step.count - steps[i+1].count) / step.count * 100).toFixed(1) : '0.0';
+      svgContent += `<text x="${W + 16}" y="${y + stepH + gap/2 + 2}" class="funnel-drop-label" fill="#6B6880" font-size="10" font-weight="600" font-family="Inter, sans-serif">-${drop}%</text>`;
     }
   });
+
+  // Labels on the left, values in center
+  steps.forEach((step, i) => {
+    const y = i * (stepH + gap);
+    const cy = y + stepH / 2;
+    svgContent += `
+      <text x="${W/2}" y="${cy - 6}" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Inter, sans-serif">${step.name}</text>
+      <text x="${W/2}" y="${cy + 12}" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="15" font-weight="800" font-family="Poppins, sans-serif">${formatNumber(step.count)}</text>
+    `;
+    // Percentage on the right
+    const pctVal = (step.count / total * 100).toFixed(1);
+    svgContent += `<text x="${W + 16}" y="${cy + 4}" fill="#6B6880" font-size="12" font-weight="700" font-family="Inter, sans-serif">${pctVal}%</text>`;
+  });
+
+  const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svgEl.setAttribute('viewBox', `0 0 ${W + 70} ${totalH}`);
+  svgEl.setAttribute('class', 'funnel-svg');
+  svgEl.innerHTML = `
+    <defs>
+      <linearGradient id="funnelShine" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="white" stop-opacity="0.12"/>
+        <stop offset="100%" stop-color="white" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    ${svgContent}
+  `;
+  funnelChart.appendChild(svgEl);
 
   // CVR Strip
   const cvrActual = document.getElementById('cvrActual');
@@ -805,18 +841,7 @@ function initTooltipSystem() {
   });
 }
 
-// ========== SIDEBAR ==========
-function bindSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const toggleBtn = document.getElementById('sidebarToggle');
-  const mobileBtn = document.getElementById('mobileMenuBtn');
-  let overlay = document.querySelector('.sidebar-overlay');
-  if (!overlay) { overlay = document.createElement('div'); overlay.className = 'sidebar-overlay'; document.body.appendChild(overlay); }
-  const close = () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); };
-  if (toggleBtn) toggleBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
-  if (mobileBtn) mobileBtn.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
-  overlay.addEventListener('click', close);
-}
+
 
 // ========== HELPERS ==========
 function num(v) { return parseInt(v) || 0; }
