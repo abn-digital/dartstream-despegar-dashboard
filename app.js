@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindDetailTable();
   bindCampaignTable();
   initTooltipSystem();
+  bindSparkModal();
   recomputeAndRender();
 });
 
@@ -861,4 +862,194 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.quadraticCurveTo(x+w, y, x+w, y+r); ctx.lineTo(x+w, y+h);
   ctx.lineTo(x, y+h); ctx.lineTo(x, y+r);
   ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
+}
+
+// ========== SPARKLINE DETAIL MODAL ==========
+const SPARK_METRICS = [
+  { index: 0, key: 'purchase_revenue', label: 'Gross Bookings', sub: 'Revenue total · USD', color: '#540CEC', bgColor: 'rgba(84,12,236,0.08)', prefix: '$', icon: 'gb' },
+  { index: 1, key: 'margin', label: 'Margen', sub: 'Rentabilidad estimada · USD', color: '#12B886', bgColor: 'rgba(18,184,134,0.08)', prefix: '$', icon: 'margin' },
+  { index: 2, key: 'purchase', label: 'Orders', sub: 'Reservas completadas', color: '#9D17C9', bgColor: 'rgba(157,23,201,0.08)', prefix: '', icon: 'orders' },
+  { index: 3, key: 'asp', label: 'ASP', sub: 'Ticket promedio · USD', color: '#E5337A', bgColor: 'rgba(229,51,122,0.08)', prefix: '$', icon: 'asp' },
+];
+
+function bindSparkModal() {
+  const cards = document.querySelectorAll('.ban-card');
+  const overlay = document.getElementById('sparkModalOverlay');
+  const closeBtn = document.getElementById('sparkModalClose');
+
+  cards.forEach((card, i) => {
+    if (i < SPARK_METRICS.length) {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.info-tip')) return; // don't open on tooltip click
+        openSparkModal(SPARK_METRICS[i]);
+      });
+    }
+  });
+
+  if (closeBtn) closeBtn.addEventListener('click', closeSparkModal);
+  if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSparkModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSparkModal(); });
+}
+
+function openSparkModal(metric) {
+  const overlay = document.getElementById('sparkModalOverlay');
+  const titleEl = document.getElementById('sparkModalTitle');
+  const subEl = document.getElementById('sparkModalSubtitle');
+  const iconEl = document.getElementById('sparkModalIcon');
+  const footerEl = document.getElementById('sparkModalFooter');
+
+  titleEl.textContent = metric.label;
+  subEl.textContent = metric.sub;
+  iconEl.style.background = metric.bgColor;
+  iconEl.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${metric.color}" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/></svg>`;
+
+  const daily = COMPUTED.daily;
+  if (daily.length > 0) {
+    const startDate = formatDateShort(daily[0].date);
+    const endDate = formatDateShort(daily[daily.length - 1].date);
+    footerEl.textContent = `Período: ${startDate} — ${endDate} · ${daily.length} días`;
+  }
+
+  overlay.classList.add('active');
+  requestAnimationFrame(() => renderSparkModalChart(metric));
+}
+
+function closeSparkModal() {
+  document.getElementById('sparkModalOverlay').classList.remove('active');
+  document.getElementById('sparkModalTooltip').style.display = 'none';
+}
+
+function renderSparkModalChart(metric) {
+  const canvas = document.getElementById('sparkModalCanvas');
+  const tooltip = document.getElementById('sparkModalTooltip');
+  if (!canvas) return;
+
+  const daily = COMPUTED.daily;
+  if (daily.length < 2) return;
+
+  const values = daily.map(d => {
+    if (metric.key === 'margin') return d.purchase_revenue * 0.0224;
+    if (metric.key === 'asp') return d.purchase > 0 ? d.purchase_revenue / d.purchase : 0;
+    return d[metric.key] || 0;
+  });
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const W = rect.width;
+  const H = rect.height - 8;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const padL = 54, padR = 16, padT = 16, padB = 32;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const max = Math.max(...values) * 1.08;
+  const min = Math.min(...values) * 0.92;
+  const range = max - min || 1;
+
+  // Grid lines + Y axis labels
+  const gridLines = 5;
+  ctx.strokeStyle = 'rgba(20,28,44,0.06)';
+  ctx.lineWidth = 1;
+  ctx.font = '10px Inter, sans-serif';
+  ctx.fillStyle = '#6B6880';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= gridLines; i++) {
+    const y = padT + (i / gridLines) * chartH;
+    const val = max - (i / gridLines) * range;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    const label = metric.prefix + formatK(val);
+    ctx.fillText(label, padL - 8, y + 3);
+  }
+
+  // X axis labels (dates)
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#6B6880';
+  const step = Math.max(1, Math.floor(daily.length / 7));
+  for (let i = 0; i < daily.length; i += step) {
+    const x = padL + (i / (daily.length - 1)) * chartW;
+    ctx.fillText(formatDateShort(daily[i].date), x, H - 6);
+  }
+  // Always show last date
+  const lastX = padL + chartW;
+  ctx.fillText(formatDateShort(daily[daily.length - 1].date), lastX, H - 6);
+
+  // Compute points
+  const points = values.map((v, i) => ({
+    x: padL + (i / (values.length - 1)) * chartW,
+    y: padT + (1 - (v - min) / range) * chartH,
+    value: v,
+    date: daily[i].date,
+  }));
+
+  // Fill area
+  const grad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+  grad.addColorStop(0, metric.color + '30');
+  grad.addColorStop(1, metric.color + '03');
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, padT + chartH);
+  points.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(points[points.length - 1].x, padT + chartH);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1], curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+  }
+  ctx.strokeStyle = metric.color;
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // Dots
+  points.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = metric.color;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+  });
+
+  // Hover interaction
+  canvas.onmousemove = (e) => {
+    const canvasRect = canvas.getBoundingClientRect();
+    const mx = e.clientX - canvasRect.left;
+    let closest = null, closestDist = Infinity;
+    points.forEach(p => {
+      const dist = Math.abs(p.x - mx);
+      if (dist < closestDist) { closestDist = dist; closest = p; }
+    });
+    if (closest && closestDist < 40) {
+      const formatted = metric.prefix + formatNumber(Math.round(closest.value));
+      tooltip.innerHTML = `<div style="font-size:10px;color:rgba(255,255,255,0.6);margin-bottom:2px">${formatDateShort(closest.date)}</div><div style="font-size:14px;font-weight:700;color:${metric.color}">${formatted}</div>`;
+      tooltip.style.display = 'block';
+
+      const body = canvas.parentElement;
+      const bodyRect = body.getBoundingClientRect();
+      let tipX = closest.x + 12;
+      let tipY = closest.y - 10;
+      if (tipX + 120 > bodyRect.width) tipX = closest.x - 130;
+      tooltip.style.left = tipX + 'px';
+      tooltip.style.top = tipY + 'px';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  };
+  canvas.onmouseleave = () => { tooltip.style.display = 'none'; };
 }

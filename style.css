@@ -355,6 +355,61 @@ h1, h2, h3, .font-display { font-family: 'Poppins', system-ui, sans-serif; }
 }
 @keyframes tooltipIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ========== SPARKLINE DETAIL MODAL ========== */
+.spark-modal-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(27,11,59,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.spark-modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+.spark-modal {
+  background: var(--surface); border: 1px solid var(--border-md); border-radius: var(--radius-lg);
+  width: 92%; max-width: 680px; box-shadow: 0 24px 80px rgba(27,11,59,0.25);
+  transform: translateY(20px) scale(0.97); transition: transform 0.3s cubic-bezier(0.22,1,0.36,1);
+  overflow: hidden;
+}
+.spark-modal-overlay.active .spark-modal { transform: translateY(0) scale(1); }
+
+.spark-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid var(--border);
+}
+.spark-modal-title-area { display: flex; align-items: center; gap: 12px; }
+.spark-modal-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.spark-modal-title { font-family: 'Poppins', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); }
+.spark-modal-subtitle { font-size: 12px; font-weight: 600; color: var(--text-3); margin-top: 1px; }
+
+.spark-modal-close {
+  width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-3); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s;
+}
+.spark-modal-close:hover { background: var(--surface-2); color: var(--text); border-color: var(--brand-border); }
+
+.spark-modal-body {
+  position: relative; padding: 16px 22px 8px; height: 260px;
+}
+.spark-modal-body canvas { width: 100% !important; height: 100% !important; cursor: crosshair; }
+
+.spark-modal-tooltip {
+  display: none; position: absolute; z-index: 10;
+  background: var(--dark); color: white; padding: 8px 14px; border-radius: var(--radius-sm);
+  font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+  box-shadow: var(--shadow-brand); pointer-events: none; white-space: nowrap;
+}
+
+.spark-modal-footer {
+  padding: 10px 22px 14px; font-size: 11px; color: var(--text-3); font-weight: 500;
+  border-top: 1px solid var(--border); text-align: center;
+}
+
+.ban-card { cursor: pointer; }
+
 /* ========== ANIMATIONS ========== */
 @keyframes slideInFromLeft { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
