@@ -14,8 +14,7 @@ const FILTERS = {
 
 let COMPUTED = { filtered: [], totals: {}, daily: [], platforms: [], campaigns: [] };
 
-// Detail table state
-const DT = { sortCol: 'date', sortDir: 'desc', page: 1, perPage: 50, searchQuery: '' };
+
 // Campaign table state
 const CT = { sortCol: 'purchase_revenue', sortDir: 'desc', page: 1, perPage: 30, searchQuery: '' };
 
@@ -25,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindFilters();
   bindTabs();
 
-  bindDetailTable();
+
   bindCampaignTable();
   initTooltipSystem();
   bindSparkModal();
@@ -148,7 +147,7 @@ function recomputeAndRender() {
 }
 
 function onFilterChange() {
-  DT.page = 1;
+
   CT.page = 1;
   recomputeAndRender();
 }
@@ -158,7 +157,7 @@ function renderActiveTab() {
   if (currentTab === 'overview') { renderBANs(totals); renderPlatformLegend(platforms); renderDonutChart(platforms); renderCVRSummary(totals, daily); }
   else if (currentTab === 'funnel') { renderFunnel(totals, daily); requestAnimationFrame(() => renderEvolutionChart(daily)); }
   else if (currentTab === 'campaigns') { renderCampaignBars(campaigns); renderCampaignTable(campaigns); }
-  else if (currentTab === 'detail') { renderDataTable(filtered); }
+
 }
 
 // ========== AGGREGATE ==========
@@ -693,81 +692,7 @@ function exportCampaignCSV() {
   downloadCSV(csv, 'despegar_campaigns_' + new Date().toISOString().slice(0, 10) + '.csv');
 }
 
-// ========== DETAIL DATA TABLE ==========
-function bindDetailTable() {
-  document.querySelectorAll('[data-table="dt"].sortable').forEach(th => {
-    th.addEventListener('click', () => {
-      const col = th.dataset.sort;
-      if (DT.sortCol === col) DT.sortDir = DT.sortDir === 'asc' ? 'desc' : 'asc';
-      else { DT.sortCol = col; DT.sortDir = 'desc'; }
-      document.querySelectorAll('[data-table="dt"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
-      th.classList.add(DT.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
-      renderDataTable(COMPUTED.filtered);
-    });
-  });
-  const searchInput = document.getElementById('dtSearch');
-  if (searchInput) {
-    let debounce;
-    searchInput.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(() => { DT.searchQuery = searchInput.value; DT.page = 1; renderDataTable(COMPUTED.filtered); }, 250); });
-  }
-  const btnCSV = document.getElementById('btnExportCSV');
-  if (btnCSV) btnCSV.addEventListener('click', () => exportDetailCSV());
-}
 
-function renderDataTable(filtered) {
-  let rows = filtered.map(r => ({ ...r, cvr: r.session_start > 0 ? r.purchase / r.session_start * 100 : 0 }));
-  if (DT.searchQuery) {
-    const q = DT.searchQuery.toLowerCase();
-    rows = rows.filter(r => r.channel_group.toLowerCase().includes(q) || r.device_category.toLowerCase().includes(q) || r.campaign_name.toLowerCase().includes(q) || r.source_medium.toLowerCase().includes(q) || r.date.includes(q));
-  }
-  rows.sort((a, b) => {
-    let va = a[DT.sortCol], vb = b[DT.sortCol];
-    if (typeof va === 'string') return DT.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-    return DT.sortDir === 'asc' ? va - vb : vb - va;
-  });
-  const totalRows = rows.length;
-  const totalPages = Math.ceil(totalRows / DT.perPage) || 1;
-  DT.page = Math.min(DT.page, totalPages);
-  const start = (DT.page - 1) * DT.perPage;
-  const pageRows = rows.slice(start, start + DT.perPage);
-
-  const tbody = document.getElementById('dtBody');
-  if (!tbody) return;
-  tbody.innerHTML = pageRows.map(r => `
-    <tr class="${r.purchase > 0 ? 'has-bookings' : ''}">
-      <td class="td-date">${formatDateShort(r.date)}</td>
-      <td>${capitalize(r.device_category)}</td>
-      <td>${escHtml(r.channel_group)}</td>
-      <td class="td-campaign" title="${escHtml(r.campaign_name)}">${escHtml(r.campaign_name)}</td>
-      <td class="td-campaign" title="${escHtml(r.source_medium)}">${escHtml(r.source_medium)}</td>
-      <td class="num">${formatNumber(r.session_start)}</td>
-      <td class="num">${formatNumber(r.search)}</td>
-      <td class="num">${formatNumber(r.view_item)}</td>
-      <td class="num">${formatNumber(r.begin_checkout)}</td>
-      <td class="num">${formatNumber(r.purchase)}</td>
-      <td class="num">$${formatNumber(Math.round(r.purchase_revenue))}</td>
-      <td class="num">${r.cvr.toFixed(2)}%</td>
-    </tr>`).join('');
-
-  const countEl = document.getElementById('dtRowCount');
-  if (countEl) countEl.textContent = totalRows.toLocaleString() + ' registros';
-  const pageInfoEl = document.getElementById('dtPageInfo');
-  if (pageInfoEl) pageInfoEl.textContent = `${start + 1}–${Math.min(start + DT.perPage, totalRows)} de ${totalRows.toLocaleString()}`;
-  renderTablePagination('dtPagination', DT, totalPages, () => renderDataTable(COMPUTED.filtered));
-}
-
-function exportDetailCSV() {
-  const rows = COMPUTED.filtered;
-  const headers = ['Date', 'Device', 'Channel', 'Campaign', 'Source/Medium', 'Sessions', 'Searches', 'Views', 'Checkout', 'Bookings', 'Revenue', 'CVR%'];
-  const csv = [headers.join(','), ...rows.map(r => [
-    r.date, r.device_category, r.channel_group,
-    '"' + (r.campaign_name || '').replace(/"/g, '""') + '"',
-    '"' + (r.source_medium || '').replace(/"/g, '""') + '"',
-    r.session_start, r.search, r.view_item, r.begin_checkout, r.purchase, r.purchase_revenue.toFixed(2),
-    (r.session_start > 0 ? r.purchase / r.session_start * 100 : 0).toFixed(2),
-  ].join(','))].join('\n');
-  downloadCSV(csv, 'despegar_detail_' + new Date().toISOString().slice(0, 10) + '.csv');
-}
 
 // ========== SHARED PAGINATION ==========
 function renderTablePagination(containerId, state, totalPages, renderFn) {

@@ -72,10 +72,7 @@
             <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             Campañas
           </button>
-          <button class="tab-btn" data-tab="detail">
-            <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            Detalle
-          </button>
+
         </div>
 
         <!-- Global Filters -->
@@ -297,52 +294,7 @@
         </section>
       </div>
 
-      <!-- ===== TAB: DETAIL ===== -->
-      <div class="tab-panel" id="panelDetail">
-        <section class="card">
-          <div class="dt-header">
-            <div class="dt-header-left">
-              <h2 class="card-title">Datos Granulares</h2>
-              <span class="dt-row-count" id="dtRowCount">0 registros</span>
-            </div>
-            <div class="dt-header-right">
-              <div class="dt-search">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="dtSearch" placeholder="Buscar canal, campaña, source...">
-              </div>
-              <button class="btn-export" id="btnExportCSV">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Exportar CSV
-              </button>
-            </div>
-          </div>
-          <div class="dt-table-wrap">
-            <table class="data-table" id="dataTable">
-              <thead>
-                <tr>
-                  <th data-sort="date" data-table="dt" class="sortable sorted-desc">Fecha<span class="sort-arrow"></span></th>
-                  <th data-sort="device_category" data-table="dt" class="sortable">Device<span class="sort-arrow"></span></th>
-                  <th data-sort="channel_group" data-table="dt" class="sortable">Canal<span class="sort-arrow"></span></th>
-                  <th data-sort="campaign_name" data-table="dt" class="sortable">Campaña<span class="sort-arrow"></span></th>
-                  <th data-sort="source_medium" data-table="dt" class="sortable">Source / Medium<span class="sort-arrow"></span></th>
-                  <th data-sort="session_start" data-table="dt" class="sortable num">Sessions<span class="sort-arrow"></span></th>
-                  <th data-sort="search" data-table="dt" class="sortable num">Searches<span class="sort-arrow"></span></th>
-                  <th data-sort="view_item" data-table="dt" class="sortable num">Views<span class="sort-arrow"></span></th>
-                  <th data-sort="begin_checkout" data-table="dt" class="sortable num">Checkout<span class="sort-arrow"></span></th>
-                  <th data-sort="purchase" data-table="dt" class="sortable num">Bookings<span class="sort-arrow"></span></th>
-                  <th data-sort="purchase_revenue" data-table="dt" class="sortable num">Revenue<span class="sort-arrow"></span></th>
-                  <th data-sort="cvr" data-table="dt" class="sortable num">CVR%<span class="sort-arrow"></span></th>
-                </tr>
-              </thead>
-              <tbody id="dtBody"></tbody>
-            </table>
-          </div>
-          <div class="dt-footer">
-            <div class="dt-page-info" id="dtPageInfo">—</div>
-            <div class="dt-pagination" id="dtPagination"></div>
-          </div>
-        </section>
-      </div>
+
 
     </div>
   </main>
