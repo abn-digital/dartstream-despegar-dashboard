@@ -18,14 +18,20 @@ let COMPUTED = { filtered: [], totals: {}, daily: [], platforms: [], campaigns: 
 // Campaign table state
 const CT = { sortCol: 'purchase_revenue', sortDir: 'desc', page: 1, perPage: 30, searchQuery: '' };
 
+// Funnel tab state (campaign scope)
+const FUNNEL = { campaign: 'all' };
+
+// Metric base: 'sessions' = sum(session_start) | 'devices' = distinct upa_id count
+let VIEW_BASE = 'sessions';
+
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
   bindFilters();
   bindTabs();
-
-
+  bindBaseToggle();
   bindCampaignTable();
+  bindFunnelControls();
   initTooltipSystem();
   bindSparkModal();
   recomputeAndRender();
@@ -46,6 +52,7 @@ async function loadData() {
     channel_group:      row.channel_group || 'Direct',
     campaign_name:      row.campaign_name || '(not set)',
     source_medium:      row.source_medium || '(not set)',
+    upa_id:             row.upa_id || '(not set)',
     session_start:      num(row.session_start),
     first_visit:        num(row.first_visit),
     page_view:          num(row.page_view),
@@ -244,17 +251,67 @@ function onFilterChange() {
 function renderActiveTab() {
   const { filtered, totals, daily, platforms, campaigns } = COMPUTED;
   if (currentTab === 'overview') { renderBANs(totals); renderPlatformLegend(platforms); renderDonutChart(platforms); renderCVRSummary(totals, daily); }
-  else if (currentTab === 'funnel') { renderFunnel(totals, daily); requestAnimationFrame(() => renderEvolutionChart(daily)); }
+  else if (currentTab === 'funnel') {
+    const scoped = getFunnelScopedData();
+    const fTotals = aggregate(scoped);
+    const fDaily = aggregateByDate(scoped);
+    renderFunnel(fTotals, fDaily);
+    requestAnimationFrame(() => renderEvolutionChart(fDaily));
+  }
   else if (currentTab === 'campaigns') { renderCampaignBars(campaigns); renderCampaignTable(campaigns); }
+}
 
+// Restrict the (already date/device/channel-filtered) data to the selected funnel campaign
+function getFunnelScopedData() {
+  if (FUNNEL.campaign === 'all') return COMPUTED.filtered;
+  return COMPUTED.filtered.filter(r => r.campaign_name === FUNNEL.campaign);
+}
+
+// ========== BASE TOGGLE (Sessions vs Dispositivos) ==========
+function bindBaseToggle() {
+  document.querySelectorAll('.base-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      VIEW_BASE = btn.dataset.base;
+      document.querySelectorAll('.base-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.base === VIEW_BASE));
+      recomputeAndRender();
+    });
+  });
+}
+
+// ========== FUNNEL CONTROLS (campaign scope) ==========
+function bindFunnelControls() {
+  const select = document.getElementById('funnelCampaignSelect');
+  if (!select) return;
+
+  // Build campaign list ordered by total revenue (most relevant first)
+  const byCamp = {};
+  RAW_DATA.forEach(r => { byCamp[r.campaign_name] = (byCamp[r.campaign_name] || 0) + r.purchase_revenue; });
+  const campaigns = Object.keys(byCamp).sort((a, b) => byCamp[b] - byCamp[a]);
+
+  select.innerHTML = '<option value="all">Todas las campañas</option>' +
+    campaigns.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+
+  select.addEventListener('change', () => {
+    FUNNEL.campaign = select.value;
+    const hint = document.getElementById('funnelScopeHint');
+    if (hint) hint.textContent = FUNNEL.campaign === 'all' ? 'Mostrando todas las campañas' : 'Funnel de: ' + FUNNEL.campaign;
+    if (currentTab === 'funnel') renderActiveTab();
+  });
 }
 
 // ========== AGGREGATE ==========
 function aggregate(data) {
-  const t = { session_start:0, first_visit:0, page_view:0, search:0, view_search_results:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0, user_engagement:0, scroll:0, click:0, form_start:0, file_download:0 };
-  data.forEach(row => Object.keys(t).forEach(k => { t[k] += row[k]; }));
+  const keys = ['session_start','first_visit','page_view','search','view_search_results','view_item','begin_checkout','purchase','purchase_revenue','user_engagement','scroll','click','form_start','file_download'];
+  const t = Object.fromEntries(keys.map(k => [k, 0]));
+  const upaSet = new Set();
+  data.forEach(row => {
+    keys.forEach(k => { t[k] += row[k]; });
+    if (row.upa_id && row.upa_id !== '(not set)') upaSet.add(row.upa_id);
+  });
+  t.devices = upaSet.size;
   t.asp = t.purchase > 0 ? t.purchase_revenue / t.purchase : 0;
-  t.cvr = t.session_start > 0 ? t.purchase / t.session_start * 100 : 0;
+  const base = VIEW_BASE === 'devices' ? t.devices : t.session_start;
+  t.cvr = base > 0 ? t.purchase / base * 100 : 0;
   t.margin = t.purchase_revenue * 0.0224;
   return t;
 }
@@ -262,22 +319,24 @@ function aggregate(data) {
 function aggregateByDate(data) {
   const byDate = {};
   data.forEach(row => {
-    if (!byDate[row.date]) byDate[row.date] = { date: row.date, session_start:0, search:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0 };
+    if (!byDate[row.date]) byDate[row.date] = { date: row.date, session_start:0, search:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0, _upa: new Set() };
     const d = byDate[row.date];
     d.session_start += row.session_start; d.search += row.search; d.view_item += row.view_item;
     d.begin_checkout += row.begin_checkout; d.purchase += row.purchase; d.purchase_revenue += row.purchase_revenue;
+    if (row.upa_id && row.upa_id !== '(not set)') d._upa.add(row.upa_id);
   });
-  return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+  return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)).map(d => ({ ...d, devices: d._upa.size }));
 }
 
 function aggregateByDevice(data) {
   const byDev = {};
   data.forEach(row => {
     const dev = row.device_category;
-    if (!byDev[dev]) byDev[dev] = { label: capitalize(dev), bookings:0, revenue:0, sessions:0 };
+    if (!byDev[dev]) byDev[dev] = { label: capitalize(dev), bookings:0, revenue:0, sessions:0, _upa: new Set() };
     byDev[dev].bookings += row.purchase; byDev[dev].revenue += row.purchase_revenue; byDev[dev].sessions += row.session_start;
+    if (row.upa_id && row.upa_id !== '(not set)') byDev[dev]._upa.add(row.upa_id);
   });
-  return Object.values(byDev).sort((a, b) => b.bookings - a.bookings);
+  return Object.values(byDev).map(d => ({ ...d, devices: d._upa.size })).sort((a, b) => b.bookings - a.bookings);
 }
 
 function aggregateByCampaign(data) {
@@ -366,7 +425,9 @@ function renderCVRSummary(totals, daily) {
   if (cvrHero) cvrHero.textContent = totals.cvr.toFixed(2) + '%';
 
   const sessionsEl = document.getElementById('cvrSessions');
-  if (sessionsEl) sessionsEl.textContent = formatNumber(totals.session_start);
+  if (sessionsEl) sessionsEl.textContent = formatNumber(VIEW_BASE === 'devices' ? totals.devices : totals.session_start);
+  const sessionsLabelEl = document.getElementById('cvrSessionsLabel');
+  if (sessionsLabelEl) sessionsLabelEl.textContent = VIEW_BASE === 'devices' ? 'Dispositivos' : 'Sessions';
 
   const bookingsEl = document.getElementById('cvrBookings');
   if (bookingsEl) bookingsEl.textContent = formatNumber(totals.purchase);
@@ -374,10 +435,11 @@ function renderCVRSummary(totals, daily) {
 
 // ========== RENDER FUNNEL ==========
 function renderFunnel(totals, daily) {
+  const baseCount = VIEW_BASE === 'devices' ? totals.devices : totals.session_start;
   const steps = [
-    { name: 'Sessions', count: totals.session_start },
-    { name: 'Searchers', count: totals.search },
-    { name: 'Detail', count: totals.view_item },
+    { name: VIEW_BASE === 'devices' ? 'Dispositivos' : 'Sessions', count: baseCount },
+    { name: 'Búsquedas', count: totals.search },
+    { name: 'Detalle', count: totals.view_item },
     { name: 'Checkout', count: totals.begin_checkout },
     { name: 'Bookings', count: totals.purchase },
   ];
@@ -530,18 +592,23 @@ function renderEvolutionChart(daily) {
     return;
   }
 
-  const searches = daily.map(d => d.search);
-  const cvr = daily.map(d => d.session_start > 0 ? d.purchase / d.session_start * 100 : 0);
+  const isDeviceBase = VIEW_BASE === 'devices';
+  const barValues = daily.map(d => isDeviceBase ? d.devices : d.search);
+  const barLabel = isDeviceBase ? 'Dispositivos' : 'Búsquedas';
+  const cvr = daily.map(d => {
+    const base = isDeviceBase ? d.devices : d.session_start;
+    return base > 0 ? d.purchase / base * 100 : 0;
+  });
   const pad = { top: 44, right: 60, bottom: 56, left: 60 };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;
-  const maxSearchers = Math.max(...searches) * 1.2 || 1;
+  const maxSearchers = Math.max(...barValues) * 1.2 || 1;
   const maxCvr = Math.max(...cvr) * 1.4 || 1;
   const barWidth = Math.min(chartW / daily.length * 0.55, 40);
   const labelStep = Math.max(1, Math.ceil(daily.length / 14));
 
   // Store geometry for interaction
-  const geo = { bars: [], points: [], daily, searches, cvr, w, h, pad, chartW, chartH, maxSearchers, maxCvr, barWidth, labelStep };
+  const geo = { bars: [], points: [], daily, barValues, cvr, w, h, pad, chartW, chartH, maxSearchers, maxCvr, barWidth, labelStep };
 
   function drawChart(highlightIdx) {
     ctx.clearRect(0, 0, w, h);
@@ -570,7 +637,7 @@ function renderEvolutionChart(daily) {
     const points = [];
     daily.forEach((d, i) => {
       const x = pad.left + (chartW / daily.length) * (i + 0.5);
-      const barH = (searches[i] / maxSearchers) * chartH;
+      const barH = (barValues[i] / maxSearchers) * chartH;
       const barY = pad.top + chartH - barH;
       const isActive = highlightIdx === i;
       const dimmed = highlightIdx >= 0 && !isActive;
@@ -629,11 +696,12 @@ function renderEvolutionChart(daily) {
     const legendY = h - 10;
     ctx.fillStyle = '#540CEC'; ctx.fillRect(pad.left, legendY - 6, 12, 8);
     ctx.fillStyle = '#56526A'; ctx.font = '600 10px Inter, sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText('Búsquedas', pad.left + 16, legendY);
-    ctx.beginPath(); ctx.moveTo(pad.left + 100, legendY - 2); ctx.lineTo(pad.left + 114, legendY - 2);
+    ctx.fillText(barLabel, pad.left + 16, legendY);
+    const legendLineX = pad.left + 16 + ctx.measureText(barLabel).width + 16;
+    ctx.beginPath(); ctx.moveTo(legendLineX, legendY - 2); ctx.lineTo(legendLineX + 14, legendY - 2);
     ctx.strokeStyle = '#E5337A'; ctx.lineWidth = 2.5; ctx.stroke();
-    ctx.beginPath(); ctx.arc(pad.left + 107, legendY - 2, 3, 0, Math.PI * 2); ctx.fillStyle = '#E5337A'; ctx.fill();
-    ctx.fillStyle = '#56526A'; ctx.fillText('CVR %', pad.left + 120, legendY);
+    ctx.beginPath(); ctx.arc(legendLineX + 7, legendY - 2, 3, 0, Math.PI * 2); ctx.fillStyle = '#E5337A'; ctx.fill();
+    ctx.fillStyle = '#56526A'; ctx.fillText('CVR %', legendLineX + 20, legendY);
   }
 
   // Initial draw (no highlight)
@@ -655,7 +723,7 @@ function renderEvolutionChart(daily) {
       const d = daily[closestIdx];
       tooltip.innerHTML = `
         <div class="ct-date">${formatDateShort(d.date)}</div>
-        <div class="ct-row"><span class="ct-dot" style="background:#540CEC"></span>Búsquedas<strong>${formatNumber(searches[closestIdx])}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#540CEC"></span>${barLabel}<strong>${formatNumber(barValues[closestIdx])}</strong></div>
         <div class="ct-row"><span class="ct-dot" style="background:#E5337A"></span>CVR<strong>${cvr[closestIdx].toFixed(2)}%</strong></div>
         <div class="ct-row"><span class="ct-dot" style="background:#9D17C9"></span>Bookings<strong>${formatNumber(d.purchase)}</strong></div>
         <div class="ct-row"><span class="ct-dot" style="background:#12B886"></span>Revenue<strong>$${formatNumber(Math.round(d.purchase_revenue))}</strong></div>
@@ -679,7 +747,7 @@ function renderEvolutionChart(daily) {
   if (!canvas._resizeBound) {
     canvas._resizeBound = true;
     let rt;
-    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (currentTab === 'funnel') renderEvolutionChart(COMPUTED.daily); }, 200); });
+    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (currentTab === 'funnel') renderActiveTab(); }, 200); });
   }
 }
 

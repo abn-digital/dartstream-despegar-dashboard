@@ -75,6 +75,12 @@
 
         </div>
 
+        <!-- Base Toggle: Sessions / Dispositivos -->
+        <div class="base-toggle" id="baseToggle">
+          <button class="base-toggle-btn active" data-base="sessions">Sessions</button>
+          <button class="base-toggle-btn" data-base="devices">Dispositivos</button>
+        </div>
+
         <!-- Global Filters -->
         <div class="global-filters" id="globalFilters">
           <!-- Date Range Picker -->
@@ -131,6 +137,7 @@
             </button>
             <div class="filter-dropdown list-dropdown" id="channelDropdown"></div>
           </div>
+
         </div>
       </div>
     </header>
@@ -235,7 +242,7 @@
               </div>
               <div class="cvr-meta">
                 <div class="cvr-meta-row">
-                  <span class="cvr-meta-label">Sessions</span>
+                  <span class="cvr-meta-label" id="cvrSessionsLabel">Sessions</span>
                   <span class="cvr-meta-value" id="cvrSessions">—</span>
                 </div>
                 <div class="cvr-meta-row">
@@ -251,11 +258,19 @@
 
       <!-- ===== TAB: FUNNEL & JOURNEY ===== -->
       <div class="tab-panel" id="panelFunnel">
+        <div class="funnel-controls">
+          <span class="funnel-controls-label">Campaña</span>
+          <div class="funnel-select-wrap">
+            <select id="funnelCampaignSelect" class="funnel-campaign-select"></select>
+            <svg class="funnel-select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span class="funnel-controls-hint" id="funnelScopeHint">Mostrando todas las campañas</span>
+        </div>
         <div class="funnel-journey-grid">
           <section class="card">
             <div class="card-header">
               <h2 class="card-title">Funnel de Conversión</h2>
-              <span class="info-tip" data-tooltip="Embudo: Sessions → Searches → Detail → Checkout → Bookings. Drop rate = pérdida porcentual entre pasos.">
+              <span class="info-tip" data-tooltip="Embudo: Sessions → Búsquedas → Detalle → Checkout → Bookings. Drop rate = pérdida porcentual entre pasos. Se ajusta a la campaña seleccionada.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
@@ -334,6 +349,7 @@
           </div>
         </section>
       </div>
+
 
 
 
