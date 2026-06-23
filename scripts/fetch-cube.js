@@ -46,6 +46,9 @@ function signJwt() {
     sub: 'despegar-dashboard',
     iat: now,
     exp: now + 300,
+    // Cube model has an access_policy gating on allowed_clients; include both
+    // the client slug and the cube name so the token passes RBAC.
+    allowed_clients: ['despegar_b2b2c'],
     allowed_cubes: [CUBE],
   }));
   const msg = `${header}.${payload}`;
