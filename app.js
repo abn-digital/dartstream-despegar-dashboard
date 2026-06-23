@@ -21,15 +21,11 @@ const CT = { sortCol: 'purchase_revenue', sortDir: 'desc', page: 1, perPage: 30,
 // Funnel tab state (campaign scope)
 const FUNNEL = { campaign: 'all' };
 
-// Metric base: 'sessions' = sum(session_start) | 'devices' = distinct upa_id count
-let VIEW_BASE = 'sessions';
-
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
   bindFilters();
   bindTabs();
-  bindBaseToggle();
   bindCampaignTable();
   bindFunnelControls();
   initTooltipSystem();
@@ -52,7 +48,6 @@ async function loadData() {
     channel_group:      row.channel_group || 'Direct',
     campaign_name:      row.campaign_name || '(not set)',
     source_medium:      row.source_medium || '(not set)',
-    upa_id:             row.upa_id || '(not set)',
     session_start:      num(row.session_start),
     first_visit:        num(row.first_visit),
     page_view:          num(row.page_view),
@@ -62,6 +57,7 @@ async function loadData() {
     begin_checkout:     num(row.begin_checkout),
     purchase:           num(row.purchase),
     purchase_revenue:   numF(row.purchase_revenue),
+    margin:             row.margin != null ? numF(row.margin) : null,
     user_engagement:    num(row.user_engagement),
     scroll:             num(row.scroll),
     click:              num(row.click),
@@ -267,17 +263,6 @@ function getFunnelScopedData() {
   return COMPUTED.filtered.filter(r => r.campaign_name === FUNNEL.campaign);
 }
 
-// ========== BASE TOGGLE (Sessions vs Dispositivos) ==========
-function bindBaseToggle() {
-  document.querySelectorAll('.base-toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      VIEW_BASE = btn.dataset.base;
-      document.querySelectorAll('.base-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.base === VIEW_BASE));
-      recomputeAndRender();
-    });
-  });
-}
-
 // ========== FUNNEL CONTROLS (campaign scope) ==========
 function bindFunnelControls() {
   const select = document.getElementById('funnelCampaignSelect');
@@ -303,40 +288,38 @@ function bindFunnelControls() {
 function aggregate(data) {
   const keys = ['session_start','first_visit','page_view','search','view_search_results','view_item','begin_checkout','purchase','purchase_revenue','user_engagement','scroll','click','form_start','file_download'];
   const t = Object.fromEntries(keys.map(k => [k, 0]));
-  const upaSet = new Set();
+  // Prefer the cube-provided margin (single source of truth); fall back to the
+  // 2.24% factor when the data source doesn't carry it (e.g. bridge data.js).
+  let marginSum = 0, hasMargin = false;
   data.forEach(row => {
     keys.forEach(k => { t[k] += row[k]; });
-    if (row.upa_id && row.upa_id !== '(not set)') upaSet.add(row.upa_id);
+    if (row.margin != null) { hasMargin = true; marginSum += row.margin; }
   });
-  t.devices = upaSet.size;
   t.asp = t.purchase > 0 ? t.purchase_revenue / t.purchase : 0;
-  const base = VIEW_BASE === 'devices' ? t.devices : t.session_start;
-  t.cvr = base > 0 ? t.purchase / base * 100 : 0;
-  t.margin = t.purchase_revenue * 0.0224;
+  t.cvr = t.session_start > 0 ? t.purchase / t.session_start * 100 : 0;
+  t.margin = hasMargin ? marginSum : t.purchase_revenue * 0.0224;
   return t;
 }
 
 function aggregateByDate(data) {
   const byDate = {};
   data.forEach(row => {
-    if (!byDate[row.date]) byDate[row.date] = { date: row.date, session_start:0, search:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0, _upa: new Set() };
+    if (!byDate[row.date]) byDate[row.date] = { date: row.date, session_start:0, search:0, view_item:0, begin_checkout:0, purchase:0, purchase_revenue:0 };
     const d = byDate[row.date];
     d.session_start += row.session_start; d.search += row.search; d.view_item += row.view_item;
     d.begin_checkout += row.begin_checkout; d.purchase += row.purchase; d.purchase_revenue += row.purchase_revenue;
-    if (row.upa_id && row.upa_id !== '(not set)') d._upa.add(row.upa_id);
   });
-  return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)).map(d => ({ ...d, devices: d._upa.size }));
+  return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function aggregateByDevice(data) {
   const byDev = {};
   data.forEach(row => {
     const dev = row.device_category;
-    if (!byDev[dev]) byDev[dev] = { label: capitalize(dev), bookings:0, revenue:0, sessions:0, _upa: new Set() };
+    if (!byDev[dev]) byDev[dev] = { label: capitalize(dev), bookings:0, revenue:0, sessions:0 };
     byDev[dev].bookings += row.purchase; byDev[dev].revenue += row.purchase_revenue; byDev[dev].sessions += row.session_start;
-    if (row.upa_id && row.upa_id !== '(not set)') byDev[dev]._upa.add(row.upa_id);
   });
-  return Object.values(byDev).map(d => ({ ...d, devices: d._upa.size })).sort((a, b) => b.bookings - a.bookings);
+  return Object.values(byDev).sort((a, b) => b.bookings - a.bookings);
 }
 
 function aggregateByCampaign(data) {
@@ -425,9 +408,7 @@ function renderCVRSummary(totals, daily) {
   if (cvrHero) cvrHero.textContent = totals.cvr.toFixed(2) + '%';
 
   const sessionsEl = document.getElementById('cvrSessions');
-  if (sessionsEl) sessionsEl.textContent = formatNumber(VIEW_BASE === 'devices' ? totals.devices : totals.session_start);
-  const sessionsLabelEl = document.getElementById('cvrSessionsLabel');
-  if (sessionsLabelEl) sessionsLabelEl.textContent = VIEW_BASE === 'devices' ? 'Dispositivos' : 'Sessions';
+  if (sessionsEl) sessionsEl.textContent = formatNumber(totals.session_start);
 
   const bookingsEl = document.getElementById('cvrBookings');
   if (bookingsEl) bookingsEl.textContent = formatNumber(totals.purchase);
@@ -435,9 +416,8 @@ function renderCVRSummary(totals, daily) {
 
 // ========== RENDER FUNNEL ==========
 function renderFunnel(totals, daily) {
-  const baseCount = VIEW_BASE === 'devices' ? totals.devices : totals.session_start;
   const steps = [
-    { name: VIEW_BASE === 'devices' ? 'Dispositivos' : 'Sessions', count: baseCount },
+    { name: 'Sessions', count: totals.session_start },
     { name: 'Búsquedas', count: totals.search },
     { name: 'Detalle', count: totals.view_item },
     { name: 'Checkout', count: totals.begin_checkout },
@@ -592,13 +572,9 @@ function renderEvolutionChart(daily) {
     return;
   }
 
-  const isDeviceBase = VIEW_BASE === 'devices';
-  const barValues = daily.map(d => isDeviceBase ? d.devices : d.search);
-  const barLabel = isDeviceBase ? 'Dispositivos' : 'Búsquedas';
-  const cvr = daily.map(d => {
-    const base = isDeviceBase ? d.devices : d.session_start;
-    return base > 0 ? d.purchase / base * 100 : 0;
-  });
+  const barValues = daily.map(d => d.search);
+  const barLabel = 'Búsquedas';
+  const cvr = daily.map(d => d.session_start > 0 ? d.purchase / d.session_start * 100 : 0);
   const pad = { top: 44, right: 60, bottom: 56, left: 60 };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;

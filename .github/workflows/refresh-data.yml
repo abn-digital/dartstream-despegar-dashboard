@@ -1,4 +1,4 @@
-name: Refresh BigQuery Data
+name: Refresh Dashboard Data (Cube)
 
 on:
   schedule:
@@ -16,83 +16,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          node-version: '20'
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Query BigQuery and generate data.js
-        run: |
-          echo "Querying BigQuery..."
-          bq query \
-            --use_legacy_sql=false \
-            --format=json \
-            --max_rows=100000 \
-            --project_id=bigquery-388915 \
-            "WITH sessions_by_dim AS (
-              SELECT
-                PARSE_DATE('%Y%m%d', date) AS date,
-                deviceCategory AS device_category,
-                COALESCE(sessionSourceMedium, '(not set)') AS source_medium,
-                COALESCE(sessionCampaignName, '(not set)') AS campaign_name,
-                COALESCE(customEvent_upa_id, '(not set)') AS upa_id,
-                SUM(sessions) AS sessions
-              FROM \`bigquery-388915.ga4_airbyte.despegar_b2b2c_custom_report\`
-              WHERE PARSE_DATE('%Y%m%d', date) >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
-                AND eventName = 'page_view'
-              GROUP BY 1, 2, 3, 4, 5
-            ),
-            base AS (
-              SELECT
-                date, device_category, channel_group,
-                COALESCE(campaign_name, '(not set)') AS campaign_name,
-                COALESCE(source_medium, '(not set)') AS source_medium,
-                COALESCE(upa_id, '(not set)') AS upa_id,
-                search, view_search_results, view_item, begin_checkout,
-                purchase, purchase_revenue, first_visit, page_view,
-                user_engagement, scroll, click, form_start, file_download
-              FROM \`bigquery-388915.despegar_b2b2c.master_results\`
-              WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
-            )
-            SELECT
-              b.date, b.device_category, b.channel_group,
-              b.campaign_name, b.source_medium, b.upa_id,
-              COALESCE(s.sessions, 0) AS session_start,
-              b.search, b.view_search_results, b.view_item, b.begin_checkout,
-              b.purchase, b.purchase_revenue, b.first_visit, b.page_view,
-              b.user_engagement, b.scroll, b.click, b.form_start, b.file_download
-            FROM base b
-            LEFT JOIN sessions_by_dim s ON
-              b.date = s.date
-              AND b.device_category = s.device_category
-              AND b.source_medium = s.source_medium
-              AND b.campaign_name = s.campaign_name
-              AND b.upa_id = s.upa_id
-            ORDER BY b.date DESC, COALESCE(s.sessions, 0) DESC" \
-            > data_raw.json 2>/dev/null
-
-          ROW_COUNT=$(python3 -c "import json; d=json.load(open('data_raw.json')); print(len(d))")
-          MIN_DATE=$(python3 -c "import json; d=json.load(open('data_raw.json')); print(min(r['date'] for r in d))")
-          MAX_DATE=$(python3 -c "import json; d=json.load(open('data_raw.json')); print(max(r['date'] for r in d))")
-
-          echo "Rows: $ROW_COUNT | Date range: $MIN_DATE to $MAX_DATE"
-
-          # Generate data.js
-          python3 -c "
-          import json
-          with open('data_raw.json') as f:
-              data = json.load(f)
-          with open('data.js', 'w') as f:
-              f.write('const INLINE_DATA = ')
-              json.dump(data, f, separators=(',', ':'))
-              f.write(';\n')
-          print(f'data.js written with {len(data)} rows')
-          "
-
-          rm data_raw.json
+      - name: Query Cube and generate data.js
+        env:
+          CUBE_JWT_SECRET: ${{ secrets.CUBE_JWT_SECRET }}
+        run: node scripts/fetch-cube.js
 
       - name: Check for changes
         id: changes
@@ -111,16 +43,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data.js
-          ROW_COUNT=$(python3 -c "
-          import json, re
-          with open('data.js') as f:
-              content = f.read()
-          match = re.search(r'const INLINE_DATA = (.+);', content, re.DOTALL)
-          if match:
-              data = json.loads(match.group(1))
-              print(len(data))
-          else:
-              print('N/A')
-          ")
-          git commit -m "data: auto-refresh $(date -u +%Y-%m-%d) — ${ROW_COUNT} rows"
+          git commit -m "data: auto-refresh $(date -u +%Y-%m-%d) via Cube"
           git push
