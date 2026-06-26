@@ -148,14 +148,14 @@
               <div class="ban-icon ban-icon-gb">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               </div>
-              <span class="ban-label">Gross Bookings</span>
-              <span class="info-tip" data-tooltip="Suma de purchase_revenue (USD). Revenue total generado por reservas en el período seleccionado. Fuente: BigQuery Despegar.">
+              <span class="ban-label">Facturación Bruta</span>
+              <span class="info-tip" data-tooltip="Suma de purchase_revenue (USD). Facturación total generada por reservas en el período seleccionado. Fuente: BigQuery Despegar.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
             <div class="ban-value" id="banGBValue">—</div>
             <div class="ban-sparkline"><svg id="sparkGB" class="sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none"></svg></div>
-            <div class="ban-footer"><span class="ban-sub">Revenue total</span><span class="ban-currency">USD</span></div>
+            <div class="ban-footer"><span class="ban-sub">Facturación total</span><span class="ban-currency">USD</span></div>
           </div>
           <div class="ban-card">
             <div class="ban-header">
@@ -176,7 +176,7 @@
               <div class="ban-icon ban-icon-orders">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
               </div>
-              <span class="ban-label">Orders</span>
+              <span class="ban-label">Reservas</span>
               <span class="info-tip" data-tooltip="Suma de purchase events de GA4. Reservas completadas exitosamente.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
@@ -191,7 +191,7 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8"/><line x1="12" y1="6" x2="12" y2="18"/></svg>
               </div>
               <span class="ban-label">ASP</span>
-              <span class="info-tip" data-tooltip="Average Selling Price = Revenue ÷ Orders. Ticket promedio por reserva.">
+              <span class="info-tip" data-tooltip="ASP = Facturación ÷ Reservas. Ticket promedio por reserva.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
@@ -215,7 +215,7 @@
                 <canvas id="donutChart" width="220" height="220"></canvas>
                 <div class="donut-center">
                   <div class="donut-center-value" id="donutCenterValue">—</div>
-                  <div class="donut-center-label">Bookings</div>
+                  <div class="donut-center-label">Reservas</div>
                 </div>
               </div>
               <div class="platform-legend" id="platformLegend"></div>
@@ -225,7 +225,7 @@
           <section class="card" id="sectionCVRSummary">
             <div class="card-header">
               <h2 class="card-title">Resumen de Conversión</h2>
-              <span class="info-tip" data-tooltip="CVR = Bookings ÷ Sessions × 100. Eficiencia de conversión del tráfico en reservas.">
+              <span class="info-tip" data-tooltip="CVR = Reservas ÷ Sesiones × 100. Eficiencia de conversión del tráfico en reservas.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
@@ -236,11 +236,11 @@
               </div>
               <div class="cvr-meta">
                 <div class="cvr-meta-row">
-                  <span class="cvr-meta-label">Sessions</span>
+                  <span class="cvr-meta-label">Sesiones</span>
                   <span class="cvr-meta-value" id="cvrSessions">—</span>
                 </div>
                 <div class="cvr-meta-row">
-                  <span class="cvr-meta-label">Bookings</span>
+                  <span class="cvr-meta-label">Reservas</span>
                   <span class="cvr-meta-value" id="cvrBookings">—</span>
                 </div>
 
@@ -264,14 +264,14 @@
           <section class="card">
             <div class="card-header">
               <h2 class="card-title">Funnel de Conversión</h2>
-              <span class="info-tip" data-tooltip="Embudo de eventos: Búsquedas → Detalle → Checkout → Bookings (cada paso ≤ el anterior). El % bajo cada flecha es la conversión al paso siguiente; el % a la derecha es la participación sobre Búsquedas. Sessions y CVR (bookings/sessions) son scope sesión y se muestran arriba. Se ajusta a la campaña seleccionada.">
+              <span class="info-tip" data-tooltip="Embudo de eventos: Búsquedas → Detalle → Checkout → Reservas (cada paso ≤ el anterior). El % bajo cada flecha es la conversión al paso siguiente; el % a la derecha es la participación sobre Búsquedas. Sesiones y CVR (reservas/sesiones) son scope sesión y se muestran arriba. Se ajusta a la campaña seleccionada.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
             <div class="cvr-strip" id="cvrStrip">
-              <div class="cvr-chip"><div class="cvr-chip-label">Sessions</div><div class="cvr-chip-value" id="cvrSessionsFunnel">—</div></div>
+              <div class="cvr-chip"><div class="cvr-chip-label">Sesiones</div><div class="cvr-chip-value" id="cvrSessionsFunnel">—</div></div>
               <div class="cvr-divider"></div>
-              <div class="cvr-chip"><div class="cvr-chip-label">Bookings</div><div class="cvr-chip-value" id="cvrBookingsFunnel">—</div></div>
+              <div class="cvr-chip"><div class="cvr-chip-label">Reservas</div><div class="cvr-chip-value" id="cvrBookingsFunnel">—</div></div>
               <div class="cvr-divider"></div>
               <div class="cvr-chip"><div class="cvr-chip-label">CVR PERÍODO</div><div class="cvr-chip-value cvr-chip-main" id="cvrActual">—</div></div>
             </div>
@@ -329,11 +329,11 @@
               <thead>
                 <tr>
                   <th data-sort="campaign_name" data-table="ct" class="sortable">Campaña<span class="sort-arrow"></span></th>
-                  <th data-sort="source_medium" data-table="ct" class="sortable">Source / Medium<span class="sort-arrow"></span></th>
-                  <th data-sort="session_start" data-table="ct" class="sortable num">Sessions<span class="sort-arrow"></span></th>
-                  <th data-sort="search" data-table="ct" class="sortable num">Searches<span class="sort-arrow"></span></th>
-                  <th data-sort="purchase" data-table="ct" class="sortable num sorted-desc">Bookings<span class="sort-arrow"></span></th>
-                  <th data-sort="purchase_revenue" data-table="ct" class="sortable num">Revenue<span class="sort-arrow"></span></th>
+                  <th data-sort="source_medium" data-table="ct" class="sortable">Origen / Medio<span class="sort-arrow"></span></th>
+                  <th data-sort="session_start" data-table="ct" class="sortable num">Sesiones<span class="sort-arrow"></span></th>
+                  <th data-sort="search" data-table="ct" class="sortable num">Búsquedas<span class="sort-arrow"></span></th>
+                  <th data-sort="purchase" data-table="ct" class="sortable num sorted-desc">Reservas<span class="sort-arrow"></span></th>
+                  <th data-sort="purchase_revenue" data-table="ct" class="sortable num">Facturación<span class="sort-arrow"></span></th>
                   <th data-sort="cvr" data-table="ct" class="sortable num">CVR%<span class="sort-arrow"></span></th>
                   <th data-sort="asp" data-table="ct" class="sortable num">ASP<span class="sort-arrow"></span></th>
                 </tr>

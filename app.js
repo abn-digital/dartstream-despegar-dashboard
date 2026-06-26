@@ -424,7 +424,7 @@ function renderFunnel(totals, daily) {
     { name: 'Búsquedas', count: totals.search },
     { name: 'Detalle', count: totals.view_item },
     { name: 'Checkout', count: totals.begin_checkout },
-    { name: 'Bookings', count: totals.purchase },
+    { name: 'Reservas', count: totals.purchase },
   ];
   const colors = ['#540CEC', '#9D17C9', '#C42B6B', '#E5337A'];
   const top = steps[0].count || 1;   // top of funnel (widest stage) = the base for widths & %
@@ -708,8 +708,8 @@ function renderEvolutionChart(daily) {
         <div class="ct-date">${formatDateShort(d.date)}</div>
         <div class="ct-row"><span class="ct-dot" style="background:#540CEC"></span>${barLabel}<strong>${formatNumber(barValues[closestIdx])}</strong></div>
         <div class="ct-row"><span class="ct-dot" style="background:#E5337A"></span>CVR<strong>${cvr[closestIdx].toFixed(2)}%</strong></div>
-        <div class="ct-row"><span class="ct-dot" style="background:#9D17C9"></span>Bookings<strong>${formatNumber(d.purchase)}</strong></div>
-        <div class="ct-row"><span class="ct-dot" style="background:#12B886"></span>Revenue<strong>$${formatNumber(Math.round(d.purchase_revenue))}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#9D17C9"></span>Reservas<strong>${formatNumber(d.purchase)}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#12B886"></span>Facturación<strong>$${formatNumber(Math.round(d.purchase_revenue))}</strong></div>
       `;
       tooltip.style.display = 'block';
       let tipX = e.clientX - rect.left + 16;
@@ -757,7 +757,7 @@ function renderCampaignBars(campaigns) {
         <div class="campaign-bar-name">${escHtml(c.campaign_name)}</div>
         <div class="campaign-bar-track"><div class="campaign-bar-fill" style="width:${pct}%"></div></div>
         <div class="campaign-bar-revenue">$${formatK(c.purchase_revenue)}</div>
-        <div class="campaign-bar-bookings">${formatNumber(c.purchase)} bkgs</div>
+        <div class="campaign-bar-bookings">${formatNumber(c.purchase)} res.</div>
       </div>`;
   }).join('');
 }
@@ -823,7 +823,7 @@ function renderCampaignTable(campaigns) {
 
 function exportCampaignCSV() {
   const rows = COMPUTED.campaigns;
-  const headers = ['Campaign', 'Source/Medium', 'Sessions', 'Searches', 'Bookings', 'Revenue', 'CVR%', 'ASP'];
+  const headers = ['Campaña', 'Origen / Medio', 'Sesiones', 'Búsquedas', 'Reservas', 'Facturación', 'CVR%', 'ASP'];
   const csv = [headers.join(','), ...rows.map(r => [
     '"' + (r.campaign_name || '').replace(/"/g, '""') + '"',
     '"' + (r.source_medium || '').replace(/"/g, '""') + '"',
@@ -931,9 +931,9 @@ function roundedRect(ctx, x, y, w, h, r) {
 
 // ========== SPARKLINE DETAIL MODAL ==========
 const SPARK_METRICS = [
-  { index: 0, key: 'purchase_revenue', label: 'Gross Bookings', sub: 'Revenue total · USD', color: '#540CEC', bgColor: 'rgba(84,12,236,0.08)', prefix: '$', icon: 'gb' },
+  { index: 0, key: 'purchase_revenue', label: 'Facturación Bruta', sub: 'Facturación total · USD', color: '#540CEC', bgColor: 'rgba(84,12,236,0.08)', prefix: '$', icon: 'gb' },
   { index: 1, key: 'margin', label: 'Margen', sub: 'Rentabilidad estimada · USD', color: '#12B886', bgColor: 'rgba(18,184,134,0.08)', prefix: '$', icon: 'margin' },
-  { index: 2, key: 'purchase', label: 'Orders', sub: 'Reservas completadas', color: '#9D17C9', bgColor: 'rgba(157,23,201,0.08)', prefix: '', icon: 'orders' },
+  { index: 2, key: 'purchase', label: 'Reservas', sub: 'Reservas completadas', color: '#9D17C9', bgColor: 'rgba(157,23,201,0.08)', prefix: '', icon: 'orders' },
   { index: 3, key: 'asp', label: 'ASP', sub: 'Ticket promedio · USD', color: '#E5337A', bgColor: 'rgba(229,51,122,0.08)', prefix: '$', icon: 'asp' },
 ];
 

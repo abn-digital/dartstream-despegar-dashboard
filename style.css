@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+/* Fonts are loaded via <link rel="stylesheet"> in index.html (non-blocking).
+   The previous @import here was redundant AND render-blocking. */
 
 /* ========== DESIGN TOKENS ========== */
 :root {
@@ -40,7 +41,7 @@
 
   --shadow-sm:     0 1px 2px rgba(20,28,44,0.06);
   --shadow:        0 8px 24px rgba(20,28,44,0.08);
-  --shadow-brand:  0 12px 32px rgba(84,12,236,0.24);
+  --shadow-brand:  0 8px 22px rgba(84,12,236,0.12);
 
   --gradient-brand: linear-gradient(120deg, #540CEC 0%, #9D17C9 55%, #E5337A 100%);
 
@@ -71,7 +72,7 @@ h1, h2, h3, .font-display { font-family: 'Poppins', system-ui, sans-serif; }
 
 /* ========== LAYOUT ========== */
 .main-content {
-  min-height: 100vh; max-width: 1480px; margin: 0 auto;
+  min-height: 100dvh; max-width: 1480px; margin: 0 auto;
 }
 
 /* ========== TOPBAR ========== */
@@ -514,4 +515,31 @@ h1, h2, h3, .font-display { font-family: 'Poppins', system-ui, sans-serif; }
   .ban-grid { grid-template-columns: 1fr; }
   .tab-btn { font-size: 12px; padding: 6px 10px; }
   .filter-btn { font-size: 11px; padding: 5px 10px; }
+}
+
+/* ========== A11Y: KEYBOARD FOCUS (D8) ========== */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+.tab-btn:focus-visible,
+.ban-card:focus-visible,
+.filter-btn:focus-visible,
+.dt-pagination button:focus-visible,
+.data-table th.sortable:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ========== A11Y: REDUCED MOTION (D5) ========== */
+/* Every animation in this file is decorative (entrance reveals, pulse, tooltips);
+   honour the user's OS-level "reduce motion" preference. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
