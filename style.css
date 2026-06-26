@@ -546,7 +546,9 @@ input:focus-visible,
   }
 }
 
-/* ========== DESPEGAR WORDMARK ========== */
+/* ========== DESPEGAR LOGO (isotype + wordmark) ========== */
+.logo-inline { display: inline-flex; align-items: center; gap: 9px; }
+.brand-isotype { display: block; height: 26px; width: auto; flex-shrink: 0; }
 .brand-wordmark {
   font-family: 'Inter', system-ui, sans-serif;
   font-weight: 700;
