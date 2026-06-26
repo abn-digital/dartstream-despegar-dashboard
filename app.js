@@ -416,28 +416,32 @@ function renderCVRSummary(totals, daily) {
 
 // ========== RENDER FUNNEL ==========
 function renderFunnel(totals, daily) {
+  // Event-scoped micro-funnel — these stages decrease monotonically, so they
+  // form a real funnel. Sessions is session-scoped (it's the CVR denominator and
+  // is ~38x smaller than `search`); mixing it in here made bar widths overflow
+  // the viewBox and percentages exceed 100%. It now lives in the strip instead.
   const steps = [
-    { name: 'Sessions', count: totals.session_start },
     { name: 'Búsquedas', count: totals.search },
     { name: 'Detalle', count: totals.view_item },
     { name: 'Checkout', count: totals.begin_checkout },
     { name: 'Bookings', count: totals.purchase },
   ];
-  const colors = ['#540CEC', '#6B0ED4', '#9D17C9', '#C42B6B', '#E5337A'];
-  const total = steps[0].count || 1;
+  const colors = ['#540CEC', '#9D17C9', '#C42B6B', '#E5337A'];
+  const top = steps[0].count || 1;   // top of funnel (widest stage) = the base for widths & %
   const funnelChart = document.getElementById('funnelChart');
   if (!funnelChart) return;
   funnelChart.innerHTML = '';
 
-  const W = 500, stepH = 56, gap = 4;
+  const W = 500, stepH = 60, gap = 6;
   const totalH = steps.length * stepH + (steps.length - 1) * gap;
-  const minW = 80;
+  const minW = 56;
 
   // Build SVG funnel
   let svgContent = '';
   steps.forEach((step, i) => {
-    const pct = step.count / total;
-    const nextPct = i < steps.length - 1 ? (steps[i+1].count / total) : pct;
+    // Clamp to 1 so a non-monotonic data quirk can never overflow the viewBox.
+    const pct = Math.min(step.count / top, 1);
+    const nextPct = i < steps.length - 1 ? Math.min(steps[i+1].count / top, 1) : pct;
     const topW = Math.max(pct * W, minW);
     const botW = Math.max(nextPct * W, minW);
     const y = i * (stepH + gap);
@@ -453,10 +457,10 @@ function renderFunnel(totals, daily) {
         fill="url(#funnelShine)" />
     `;
 
-    // Drop indicator between steps
+    // Conversion to the next step (share that advanced) — always within 0–100%.
     if (i < steps.length - 1) {
-      const drop = step.count > 0 ? ((step.count - steps[i+1].count) / step.count * 100).toFixed(1) : '0.0';
-      svgContent += `<text x="${W + 16}" y="${y + stepH + gap/2 + 2}" class="funnel-drop-label" fill="#6B6880" font-size="10" font-weight="600" font-family="Inter, sans-serif">-${drop}%</text>`;
+      const conv = step.count > 0 ? (steps[i+1].count / step.count * 100) : 0;
+      svgContent += `<text x="${W + 18}" y="${y + stepH + gap/2 + 3}" class="funnel-drop-label" fill="#9D17C9" font-size="11" font-weight="700" font-family="Inter, sans-serif">▼ ${conv.toFixed(1)}%</text>`;
     }
   });
 
@@ -465,16 +469,16 @@ function renderFunnel(totals, daily) {
     const y = i * (stepH + gap);
     const cy = y + stepH / 2;
     svgContent += `
-      <text x="${W/2}" y="${cy - 6}" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Inter, sans-serif">${step.name}</text>
-      <text x="${W/2}" y="${cy + 12}" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="15" font-weight="800" font-family="Poppins, sans-serif">${formatNumber(step.count)}</text>
+      <text x="${W/2}" y="${cy - 7}" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Inter, sans-serif">${step.name}</text>
+      <text x="${W/2}" y="${cy + 13}" text-anchor="middle" fill="rgba(255,255,255,0.92)" font-size="16" font-weight="800" font-family="Poppins, sans-serif">${formatNumber(step.count)}</text>
     `;
-    // Percentage on the right
-    const pctVal = (step.count / total * 100).toFixed(1);
-    svgContent += `<text x="${W + 16}" y="${cy + 4}" fill="#6B6880" font-size="12" font-weight="700" font-family="Inter, sans-serif">${pctVal}%</text>`;
+    // Share of the top of the funnel (Búsquedas) on the right — always ≤ 100%.
+    const pctVal = (step.count / top * 100).toFixed(1);
+    svgContent += `<text x="${W + 18}" y="${cy + 4}" fill="#6B6880" font-size="12" font-weight="700" font-family="Inter, sans-serif">${pctVal}%</text>`;
   });
 
   const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svgEl.setAttribute('viewBox', `0 0 ${W + 70} ${totalH}`);
+  svgEl.setAttribute('viewBox', `0 0 ${W + 90} ${totalH}`);
   svgEl.setAttribute('class', 'funnel-svg');
   svgEl.innerHTML = `
     <defs>
@@ -487,9 +491,12 @@ function renderFunnel(totals, daily) {
   `;
   funnelChart.appendChild(svgEl);
 
-  // CVR Strip
-  const cvrActual = document.getElementById('cvrActual');
-  if (cvrActual) cvrActual.textContent = totals.cvr.toFixed(2) + '%';
+  // CVR Strip — Sessions (base) + Bookings are session-scoped context for the
+  // session→booking conversion rate; they intentionally sit outside the funnel.
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setText('cvrSessionsFunnel', formatNumber(totals.session_start));
+  setText('cvrBookingsFunnel', formatNumber(totals.purchase));
+  setText('cvrActual', totals.cvr.toFixed(2) + '%');
 }
 
 // ========== PLATFORM LEGEND ==========

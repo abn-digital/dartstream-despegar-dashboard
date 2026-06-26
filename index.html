@@ -264,11 +264,15 @@
           <section class="card">
             <div class="card-header">
               <h2 class="card-title">Funnel de Conversión</h2>
-              <span class="info-tip" data-tooltip="Embudo: Sessions → Búsquedas → Detalle → Checkout → Bookings. Drop rate = pérdida porcentual entre pasos. Se ajusta a la campaña seleccionada.">
+              <span class="info-tip" data-tooltip="Embudo de eventos: Búsquedas → Detalle → Checkout → Bookings (cada paso ≤ el anterior). El % bajo cada flecha es la conversión al paso siguiente; el % a la derecha es la participación sobre Búsquedas. Sessions y CVR (bookings/sessions) son scope sesión y se muestran arriba. Se ajusta a la campaña seleccionada.">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
             </div>
             <div class="cvr-strip" id="cvrStrip">
+              <div class="cvr-chip"><div class="cvr-chip-label">Sessions</div><div class="cvr-chip-value" id="cvrSessionsFunnel">—</div></div>
+              <div class="cvr-divider"></div>
+              <div class="cvr-chip"><div class="cvr-chip-label">Bookings</div><div class="cvr-chip-value" id="cvrBookingsFunnel">—</div></div>
+              <div class="cvr-divider"></div>
               <div class="cvr-chip"><div class="cvr-chip-label">CVR PERÍODO</div><div class="cvr-chip-value cvr-chip-main" id="cvrActual">—</div></div>
             </div>
             <div class="funnel-chart" id="funnelChart"></div>
