@@ -546,15 +546,6 @@ input:focus-visible,
   }
 }
 
-/* ========== DESPEGAR LOGO (isotype + wordmark) ========== */
-.logo-inline { display: inline-flex; align-items: center; gap: 9px; }
-.brand-isotype { display: block; height: 26px; width: auto; flex-shrink: 0; }
-.brand-wordmark {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 700;
-  font-size: 22px;
-  letter-spacing: -0.045em;
-  color: var(--brand);
-  line-height: 1;
-  display: inline-block;
-}
+/* ========== DESPEGAR LOGO ========== */
+.logo-inline { display: inline-flex; align-items: center; }
+.brand-logo { height: 26px; width: auto; display: block; }
