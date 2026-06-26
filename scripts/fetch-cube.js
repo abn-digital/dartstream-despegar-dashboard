@@ -59,9 +59,9 @@ function signJwt() {
 const m = (n) => `${CUBE}.${n}`;
 const query = {
   measures: [
-    // `sessions` is the canonical session-scoped GA4 metric. `session_start`
-    // (raw eventCount) under-reports and is intentionally not used as the base.
-    'sessions', 'first_visit', 'page_view', 'search', 'view_search_results',
+    // session_start (GA4 eventCount) is the single session proxy / CVR base.
+    // The session-scoped `sessions` measure was removed from the cube model.
+    'session_start', 'first_visit', 'page_view', 'search', 'view_search_results',
     'view_item', 'begin_checkout', 'purchase', 'purchase_revenue', 'margin',
     'user_engagement', 'scroll', 'click', 'form_start', 'file_download',
   ].map(m),
@@ -109,9 +109,6 @@ function normalize(rows) {
     for (const k in r) {
       let key = k.startsWith(prefix) ? k.slice(prefix.length) : k;
       if (key === 'date.day' || key === 'date.week' || key === 'date.month') continue;
-      // app.js reads `session_start` as the session base; map the canonical
-      // `sessions` measure onto that field so the frontend stays unchanged.
-      if (key === 'sessions') key = 'session_start';
       let v = r[k];
       if (key === 'date' && typeof v === 'string' && v.length > 10 && v[10] === 'T') v = v.slice(0, 10);
       out[key] = v;
