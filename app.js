@@ -434,7 +434,9 @@ function renderFunnel(totals, daily) {
 
   const W = 500, stepH = 60, gap = 6;
   const totalH = steps.length * stepH + (steps.length - 1) * gap;
-  const minW = 56;
+  // Min width must fit the in-bar value label (e.g. "143,700" at 16px) so the
+  // text never overflows a thin trapezoid onto the white card (white-on-white).
+  const minW = 90;
 
   // Build SVG funnel
   let svgContent = '';
@@ -469,8 +471,8 @@ function renderFunnel(totals, daily) {
     const y = i * (stepH + gap);
     const cy = y + stepH / 2;
     svgContent += `
-      <text x="${W/2}" y="${cy - 7}" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Inter, sans-serif">${step.name}</text>
-      <text x="${W/2}" y="${cy + 13}" text-anchor="middle" fill="rgba(255,255,255,0.92)" font-size="16" font-weight="800" font-family="Poppins, sans-serif">${formatNumber(step.count)}</text>
+      <text x="${W/2}" y="${cy - 7}" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Inter, sans-serif" paint-order="stroke" stroke="rgba(30,8,55,0.40)" stroke-width="2" stroke-linejoin="round">${step.name}</text>
+      <text x="${W/2}" y="${cy + 13}" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="800" font-family="Poppins, sans-serif" paint-order="stroke" stroke="rgba(30,8,55,0.45)" stroke-width="2.5" stroke-linejoin="round">${formatNumber(step.count)}</text>
     `;
     // Share of the top of the funnel (Búsquedas) on the right — always ≤ 100%.
     const pctVal = (step.count / top * 100).toFixed(1);
