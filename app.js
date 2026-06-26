@@ -8,8 +8,8 @@ let currentTab = 'overview';
 const FILTERS = {
   dateFrom: '',
   dateTo: '',
-  device: 'all',
-  channel: 'all',
+  device: [],   // empty = Todos (multi-select)
+  channel: [],  // empty = Todos (multi-select)
 };
 
 let COMPUTED = { filtered: [], totals: {}, daily: [], platforms: [], campaigns: [] };
@@ -153,51 +153,78 @@ function bindFilters() {
     dateLabel.textContent = formatDateCompact2(FILTERS.dateFrom) + ' — ' + formatDateCompact2(FILTERS.dateTo);
   }
 
-  // --- Device ---
-  const deviceBtn = document.getElementById('deviceFilterBtn');
-  const deviceDropdown = document.getElementById('deviceDropdown');
-  const deviceLabel = document.getElementById('deviceLabel');
+  // --- Device (multi-select) ---
+  bindMultiSelect(
+    document.getElementById('deviceFilterBtn'),
+    document.getElementById('deviceDropdown'),
+    document.getElementById('deviceLabel'),
+    'device', 'Device'
+  );
 
-  deviceBtn.addEventListener('click', () => toggleDropdown(deviceBtn, deviceDropdown));
-  deviceDropdown.querySelectorAll('.dropdown-item').forEach(item => {
-    item.addEventListener('click', () => {
-      FILTERS.device = item.dataset.value;
-      deviceDropdown.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-      deviceLabel.textContent = item.dataset.value === 'all' ? 'Device: Todos' : capitalize(item.dataset.value);
-      closeAllDropdowns();
-      onFilterChange();
-    });
-  });
-
-  // --- Channel ---
-  const channelBtn = document.getElementById('channelFilterBtn');
+  // --- Channel (multi-select) ---
   const channelDropdown = document.getElementById('channelDropdown');
-  const channelLabel = document.getElementById('channelLabel');
-
   const channels = [...new Set(RAW_DATA.map(r => r.channel_group))].sort();
   channelDropdown.innerHTML = '<button class="dropdown-item active" data-value="all">Todos</button>';
   channels.forEach(ch => {
     channelDropdown.innerHTML += `<button class="dropdown-item" data-value="${ch.toLowerCase()}">${ch}</button>`;
   });
-
-  channelBtn.addEventListener('click', () => toggleDropdown(channelBtn, channelDropdown));
-  channelDropdown.querySelectorAll('.dropdown-item').forEach(item => {
-    item.addEventListener('click', () => {
-      FILTERS.channel = item.dataset.value;
-      channelDropdown.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-      channelLabel.textContent = item.dataset.value === 'all' ? 'Canal: Todos' : item.textContent;
-      closeAllDropdowns();
-      onFilterChange();
-    });
-  });
+  bindMultiSelect(
+    document.getElementById('channelFilterBtn'),
+    channelDropdown,
+    document.getElementById('channelLabel'),
+    'channel', 'Canal'
+  );
 
   // --- Global close ---
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.filter-group')) closeAllDropdowns();
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllDropdowns(); });
+}
+
+// Multi-select dropdown: clicking items toggles them, "Todos" clears the selection.
+// Empty selection ([]) means "all". Dropdown stays open while picking.
+function bindMultiSelect(btn, dropdown, labelEl, filterKey, labelPrefix) {
+  btn.addEventListener('click', () => toggleDropdown(btn, dropdown));
+
+  function syncActive() {
+    const sel = FILTERS[filterKey];
+    dropdown.querySelectorAll('.dropdown-item').forEach(i => {
+      const v = i.dataset.value;
+      i.classList.toggle('active', v === 'all' ? sel.length === 0 : sel.includes(v));
+    });
+  }
+
+  function updateLabel() {
+    const sel = FILTERS[filterKey];
+    if (sel.length === 0) { labelEl.textContent = labelPrefix + ': Todos'; return; }
+    if (sel.length === 1) {
+      const item = dropdown.querySelector('.dropdown-item[data-value="' + sel[0] + '"]');
+      labelEl.textContent = item ? item.textContent.trim() : labelPrefix + ': 1';
+      return;
+    }
+    labelEl.textContent = labelPrefix + ': ' + sel.length;
+  }
+
+  dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const v = item.dataset.value;
+      const sel = FILTERS[filterKey];
+      if (v === 'all') {
+        FILTERS[filterKey] = [];
+      } else {
+        const idx = sel.indexOf(v);
+        if (idx >= 0) sel.splice(idx, 1); else sel.push(v);
+      }
+      syncActive();
+      updateLabel();
+      onFilterChange();
+    });
+  });
+
+  syncActive();
+  updateLabel();
 }
 
 function toggleDropdown(btn, dropdown) {
@@ -222,8 +249,8 @@ function getFilteredData() {
   return RAW_DATA.filter(row => {
     if (FILTERS.dateFrom && row.date < FILTERS.dateFrom) return false;
     if (FILTERS.dateTo && row.date > FILTERS.dateTo) return false;
-    if (FILTERS.device !== 'all' && row.device_category !== FILTERS.device) return false;
-    if (FILTERS.channel !== 'all' && row.channel_group.toLowerCase() !== FILTERS.channel) return false;
+    if (FILTERS.device.length && !FILTERS.device.includes(row.device_category)) return false;
+    if (FILTERS.channel.length && !FILTERS.channel.includes(row.channel_group.toLowerCase())) return false;
     return true;
   });
 }
@@ -659,9 +686,9 @@ function renderEvolutionChart(daily) {
       geo.points[i] = { x, y: cvrY };
     });
 
-    // CVR line
+    // CVR line (smoothed via Catmull-Rom spline)
     ctx.beginPath(); ctx.strokeStyle = '#17181F'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    points.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+    strokeSmoothPath(ctx, points);
     ctx.stroke();
 
     // CVR dots
@@ -922,6 +949,27 @@ function formatK(n) {
   return Math.round(n).toString();
 }
 function escHtml(s) { const div = document.createElement('div'); div.textContent = s; return div.innerHTML; }
+// Draws a smooth curve through the given points using a Catmull-Rom spline
+// converted to cubic Béziers. Assumes ctx.beginPath() was already called.
+function strokeSmoothPath(ctx, pts) {
+  if (pts.length < 3) {
+    pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+    return;
+  }
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i === 0 ? 0 : i - 1];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2 < pts.length ? i + 2 : pts.length - 1];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+  }
+}
+
 function roundedRect(ctx, x, y, w, h, r) {
   if (h <= 0) return;
   r = Math.min(r, w/2, h/2);
