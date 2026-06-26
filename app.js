@@ -687,7 +687,7 @@ function renderEvolutionChart(daily) {
     });
 
     // CVR line (smoothed via Catmull-Rom spline)
-    ctx.beginPath(); ctx.strokeStyle = '#17181F'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.strokeStyle = 'rgba(23,24,31,0.55)'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     strokeSmoothPath(ctx, points);
     ctx.stroke();
 
