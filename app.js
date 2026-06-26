@@ -362,10 +362,10 @@ function renderSparklines(daily) {
   if (daily.length < 2) return;
 
   const sparkConfigs = [
-    { id: 'sparkGB', key: 'purchase_revenue', color: '#540CEC' },
-    { id: 'sparkMargin', key: 'purchase_revenue', color: '#12B886', multiplier: 0.0224 },
-    { id: 'sparkOrders', key: 'purchase', color: '#9D17C9' },
-    { id: 'sparkASP', key: null, color: '#E5337A' }, // computed: revenue / orders
+    { id: 'sparkGB', key: 'purchase_revenue', color: '#550FED' },
+    { id: 'sparkMargin', key: 'purchase_revenue', color: '#2E7D5B', multiplier: 0.0224 },
+    { id: 'sparkOrders', key: 'purchase', color: '#7C4DEE' },
+    { id: 'sparkASP', key: null, color: '#5B5E6B' }, // computed: revenue / orders
   ];
 
   sparkConfigs.forEach(cfg => {
@@ -426,7 +426,7 @@ function renderFunnel(totals, daily) {
     { name: 'Checkout', count: totals.begin_checkout },
     { name: 'Reservas', count: totals.purchase },
   ];
-  const colors = ['#540CEC', '#9D17C9', '#C42B6B', '#E5337A'];
+  const colors = ['#3E0AB8', '#550FED', '#7C4DEE', '#A98CF5'];
   const top = steps[0].count || 1;   // top of funnel (widest stage) = the base for widths & %
   const funnelChart = document.getElementById('funnelChart');
   if (!funnelChart) return;
@@ -462,7 +462,7 @@ function renderFunnel(totals, daily) {
     // Conversion to the next step (share that advanced) — always within 0–100%.
     if (i < steps.length - 1) {
       const conv = step.count > 0 ? (steps[i+1].count / step.count * 100) : 0;
-      svgContent += `<text x="${W + 18}" y="${y + stepH + gap/2 + 3}" class="funnel-drop-label" fill="#9D17C9" font-size="11" font-weight="700" font-family="Inter, sans-serif">▼ ${conv.toFixed(1)}%</text>`;
+      svgContent += `<text x="${W + 18}" y="${y + stepH + gap/2 + 3}" class="funnel-drop-label" fill="#550FED" font-size="11" font-weight="600" font-family="Inter, sans-serif">▼ ${conv.toFixed(1)}%</text>`;
     }
   });
 
@@ -471,8 +471,8 @@ function renderFunnel(totals, daily) {
     const y = i * (stepH + gap);
     const cy = y + stepH / 2;
     svgContent += `
-      <text x="${W/2}" y="${cy - 7}" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Inter, sans-serif" paint-order="stroke" stroke="rgba(30,8,55,0.40)" stroke-width="2" stroke-linejoin="round">${step.name}</text>
-      <text x="${W/2}" y="${cy + 13}" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="800" font-family="Poppins, sans-serif" paint-order="stroke" stroke="rgba(30,8,55,0.45)" stroke-width="2.5" stroke-linejoin="round">${formatNumber(step.count)}</text>
+      <text x="${W/2}" y="${cy - 7}" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="10.5" font-weight="500" font-family="Inter, sans-serif" letter-spacing="0.04em" paint-order="stroke" stroke="rgba(18,6,55,0.30)" stroke-width="1.6" stroke-linejoin="round">${step.name.toUpperCase()}</text>
+      <text x="${W/2}" y="${cy + 13}" text-anchor="middle" fill="#FFFFFF" font-size="17" font-weight="400" font-family="Inter, sans-serif" letter-spacing="-0.01em" paint-order="stroke" stroke="rgba(18,6,55,0.30)" stroke-width="2" stroke-linejoin="round">${formatNumber(step.count)}</text>
     `;
     // Share of the top of the funnel (Búsquedas) on the right — always ≤ 100%.
     const pctVal = (step.count / top * 100).toFixed(1);
@@ -503,7 +503,7 @@ function renderFunnel(totals, daily) {
 
 // ========== PLATFORM LEGEND ==========
 function renderPlatformLegend(platforms) {
-  const colors = ['#540CEC', '#9D17C9', '#E5337A', '#FF7A33'];
+  const colors = ['#550FED', '#7C4DEE', '#A98CF5', '#CFC2FA'];
   const totalBookings = platforms.reduce((s, p) => s + p.bookings, 0) || 1;
   const centerVal = document.getElementById('donutCenterValue');
   if (centerVal) centerVal.textContent = formatK(totalBookings);
@@ -532,7 +532,7 @@ function renderDonutChart(platforms) {
   canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
   ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr, dpr);
 
-  const colors = ['#540CEC', '#9D17C9', '#E5337A', '#FF7A33'];
+  const colors = ['#550FED', '#7C4DEE', '#A98CF5', '#CFC2FA'];
   const totalBookings = platforms.reduce((s, p) => s + p.bookings, 0) || 1;
   const segments = platforms.map((p, i) => ({ value: p.bookings / totalBookings * 100, color: colors[i % colors.length] }));
   const cx = size/2, cy = size/2, outerR = 90, innerR = 62, gap = 0.04;
@@ -630,7 +630,7 @@ function renderEvolutionChart(daily) {
       // Vertical crosshair for active bar
       if (isActive) {
         ctx.save();
-        ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(84,12,236,0.2)'; ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(20,21,30,0.10)'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + chartH); ctx.stroke();
         ctx.setLineDash([]); ctx.restore();
       }
@@ -638,8 +638,8 @@ function renderEvolutionChart(daily) {
       // Bar
       ctx.globalAlpha = dimmed ? 0.25 : 1;
       const grad = ctx.createLinearGradient(0, barY, 0, pad.top + chartH);
-      grad.addColorStop(0, isActive ? '#7A0FD6' : '#540CEC');
-      grad.addColorStop(1, isActive ? '#9D17C9' : '#7A0FD6');
+      grad.addColorStop(0, isActive ? '#7C4DEE' : '#550FED');
+      grad.addColorStop(1, isActive ? '#550FED' : '#3E0AB8');
       ctx.fillStyle = grad;
       roundedRect(ctx, x - barWidth/2, barY, barWidth, barH, 4);
       ctx.fill();
@@ -647,7 +647,7 @@ function renderEvolutionChart(daily) {
 
       // Date label — only show every Nth or if active
       if (i % labelStep === 0 || isActive) {
-        ctx.fillStyle = isActive ? '#540CEC' : '#8E8AA3';
+        ctx.fillStyle = isActive ? '#550FED' : '#9A9CA8';
         ctx.font = (isActive ? '700' : '500') + ' 10px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(formatDateCompact(d.date), x, pad.top + chartH + 18);
@@ -660,7 +660,7 @@ function renderEvolutionChart(daily) {
     });
 
     // CVR line
-    ctx.beginPath(); ctx.strokeStyle = '#E5337A'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.strokeStyle = '#17181F'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     points.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
     ctx.stroke();
 
@@ -672,20 +672,20 @@ function renderEvolutionChart(daily) {
       ctx.beginPath(); ctx.arc(pt.x, pt.y, isActive ? 7 : 4, 0, Math.PI * 2);
       ctx.fillStyle = isActive ? 'rgba(229,51,122,0.15)' : 'rgba(229,51,122,0.1)'; ctx.fill();
       ctx.beginPath(); ctx.arc(pt.x, pt.y, isActive ? 4.5 : 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#E5337A'; ctx.fill();
+      ctx.fillStyle = '#17181F'; ctx.fill();
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.globalAlpha = 1;
     });
 
     // Legend at bottom
     const legendY = h - 10;
-    ctx.fillStyle = '#540CEC'; ctx.fillRect(pad.left, legendY - 6, 12, 8);
+    ctx.fillStyle = '#550FED'; ctx.fillRect(pad.left, legendY - 6, 12, 8);
     ctx.fillStyle = '#56526A'; ctx.font = '600 10px Inter, sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(barLabel, pad.left + 16, legendY);
     const legendLineX = pad.left + 16 + ctx.measureText(barLabel).width + 16;
     ctx.beginPath(); ctx.moveTo(legendLineX, legendY - 2); ctx.lineTo(legendLineX + 14, legendY - 2);
-    ctx.strokeStyle = '#E5337A'; ctx.lineWidth = 2.5; ctx.stroke();
-    ctx.beginPath(); ctx.arc(legendLineX + 7, legendY - 2, 3, 0, Math.PI * 2); ctx.fillStyle = '#E5337A'; ctx.fill();
+    ctx.strokeStyle = '#17181F'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(legendLineX + 7, legendY - 2, 3, 0, Math.PI * 2); ctx.fillStyle = '#17181F'; ctx.fill();
     ctx.fillStyle = '#56526A'; ctx.fillText('CVR %', legendLineX + 20, legendY);
   }
 
@@ -708,10 +708,10 @@ function renderEvolutionChart(daily) {
       const d = daily[closestIdx];
       tooltip.innerHTML = `
         <div class="ct-date">${formatDateShort(d.date)}</div>
-        <div class="ct-row"><span class="ct-dot" style="background:#540CEC"></span>${barLabel}<strong>${formatNumber(barValues[closestIdx])}</strong></div>
-        <div class="ct-row"><span class="ct-dot" style="background:#E5337A"></span>CVR<strong>${cvr[closestIdx].toFixed(2)}%</strong></div>
-        <div class="ct-row"><span class="ct-dot" style="background:#9D17C9"></span>Reservas<strong>${formatNumber(d.purchase)}</strong></div>
-        <div class="ct-row"><span class="ct-dot" style="background:#12B886"></span>Facturación<strong>$${formatNumber(Math.round(d.purchase_revenue))}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#550FED"></span>${barLabel}<strong>${formatNumber(barValues[closestIdx])}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#17181F"></span>CVR<strong>${cvr[closestIdx].toFixed(2)}%</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#7C4DEE"></span>Reservas<strong>${formatNumber(d.purchase)}</strong></div>
+        <div class="ct-row"><span class="ct-dot" style="background:#2E7D5B"></span>Facturación<strong>$${formatNumber(Math.round(d.purchase_revenue))}</strong></div>
       `;
       tooltip.style.display = 'block';
       let tipX = e.clientX - rect.left + 16;
@@ -933,10 +933,10 @@ function roundedRect(ctx, x, y, w, h, r) {
 
 // ========== SPARKLINE DETAIL MODAL ==========
 const SPARK_METRICS = [
-  { index: 0, key: 'purchase_revenue', label: 'Facturación Bruta', sub: 'Facturación total · USD', color: '#540CEC', bgColor: 'rgba(84,12,236,0.08)', prefix: '$', icon: 'gb' },
-  { index: 1, key: 'margin', label: 'Margen', sub: 'Rentabilidad estimada · USD', color: '#12B886', bgColor: 'rgba(18,184,134,0.08)', prefix: '$', icon: 'margin' },
-  { index: 2, key: 'purchase', label: 'Reservas', sub: 'Reservas completadas', color: '#9D17C9', bgColor: 'rgba(157,23,201,0.08)', prefix: '', icon: 'orders' },
-  { index: 3, key: 'asp', label: 'ASP', sub: 'Ticket promedio · USD', color: '#E5337A', bgColor: 'rgba(229,51,122,0.08)', prefix: '$', icon: 'asp' },
+  { index: 0, key: 'purchase_revenue', label: 'Facturación Bruta', sub: 'Facturación total · USD', color: '#550FED', bgColor: 'rgba(85,15,237,0.06)', prefix: '$', icon: 'gb' },
+  { index: 1, key: 'margin', label: 'Margen', sub: 'Rentabilidad estimada · USD', color: '#2E7D5B', bgColor: 'rgba(46,125,91,0.07)', prefix: '$', icon: 'margin' },
+  { index: 2, key: 'purchase', label: 'Reservas', sub: 'Reservas completadas', color: '#7C4DEE', bgColor: 'rgba(124,77,238,0.07)', prefix: '', icon: 'orders' },
+  { index: 3, key: 'asp', label: 'ASP', sub: 'Ticket promedio · USD', color: '#5B5E6B', bgColor: 'rgba(91,94,107,0.07)', prefix: '$', icon: 'asp' },
 ];
 
 function bindSparkModal() {
